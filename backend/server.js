@@ -62,14 +62,25 @@ const Task = sequelize.define('Task', {
     type: DataTypes.STRING,
     defaultValue: '#3498db'
   },
-  description: {
+  notes: {
     type: DataTypes.TEXT,
+    allowNull: true
+  },
+  type: {
+    type: DataTypes.STRING,
+    defaultValue: 'task',
+    allowNull: false
+  },
+  symbol: {
+    type: DataTypes.STRING,
     allowNull: true
   }
 });
 
 app.get('/api/tasks', async (req, res) => {
   try {
+
+
     const tasks = await Task.findAll();
     res.json(tasks);
   } catch (error) {
@@ -112,7 +123,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   }
 });
 
-sequelize.sync({ force: false }).then(() => {
+sequelize.sync({ force: true }).then(() => {
   console.log('Database synced');
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
