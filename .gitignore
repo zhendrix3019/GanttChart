@@ -43,3 +43,14 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+
+# Database files
+*.db
+database/
+backend/database/
+
+# Claude Code configuration
+.claude/
+
+# Error files
+nul

@@ -7,10 +7,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.3.4",
-    "gantt-elastic": "^1.0.12",
     "axios": "^1.6.0",
-    "dayjs": "^1.11.10"
+    "dayjs": "^1.11.10",
+    "gantt-elastic": "^1.0.12",
+    "html2canvas": "^1.4.1",
+    "vue": "^3.3.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.4.0",
