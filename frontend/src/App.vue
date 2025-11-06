@@ -22,9 +22,14 @@
 
         <div class="gantt-body">
           <div v-for="section in sections" :key="section.id" class="section-group">
-            <div class="section-header">
+            <div class="task-row section-title-row">
               <div class="row-number"></div>
-              <div class="section-title">{{ section.name }}</div>
+              <div class="timeline-area">
+                <div class="grid-lines">
+                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }"></div>
+                </div>
+                <div class="section-title-text">{{ section.name }}</div>
+              </div>
             </div>
 
             <div v-for="(task, index) in section.tasks" :key="task.id" class="task-row">
@@ -49,7 +54,9 @@
                      :style="getTaskBarStyle(task)"
                      @click="selectTask(task)"
                      :title="task.name">
+                  <span class="task-date-start">{{ getTaskStartDay(task) }}</span>
                   <span class="task-text">{{ task.name }}</span>
+                  <span class="task-date-end">{{ getTaskEndDay(task) }}</span>
                 </div>
 
                 <svg v-if="task.dependencies && task.dependencies.length" class="dependency-lines">
@@ -235,6 +242,16 @@ export default {
 
     const selectTask = (task) => {
       selectedTask.value = task
+    }
+
+    const getTaskStartDay = (task) => {
+      const taskStart = dayjs(task.start_date)
+      return taskStart.format('D')
+    }
+
+    const getTaskEndDay = (task) => {
+      const taskEnd = dayjs(task.end_date)
+      return taskEnd.format('D')
     }
 
     const setStartDate = () => {
@@ -748,6 +765,8 @@ export default {
       getTaskBarStyle,
       getDependencyPaths,
       selectTask,
+      getTaskStartDay,
+      getTaskEndDay,
       setStartDate,
       selectWorkDays,
       setScale,

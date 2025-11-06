@@ -85,20 +85,25 @@ body {
   border-bottom: 1px solid #666;
 }
 
-.section-header {
-  display: flex;
-  background: #D8E8F0;
-  border-bottom: 1px solid #888;
+.section-title-row {
+  background: #fff;
+  border-bottom: 1px solid #ddd;
   min-height: 25px;
 }
 
-.section-title {
-  padding: 4px 10px;
+.section-title-text {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   font-weight: bold;
   font-size: 13px;
   color: #000;
   text-decoration: underline;
   font-style: italic;
+  z-index: 5;
+  background: white;
+  padding: 2px 5px;
 }
 
 .task-row {
@@ -205,6 +210,29 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  flex: 1;
+}
+
+.task-date-start,
+.task-date-end {
+  position: absolute;
+  font-size: 9px;
+  color: #000;
+  font-weight: bold;
+  background: white;
+  padding: 1px 3px;
+  border-radius: 2px;
+  z-index: 15;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.task-date-start {
+  left: -25px;
+}
+
+.task-date-end {
+  right: -25px;
 }
 
 .milestone {
