@@ -1,10 +1,31 @@
 <template>
   <div id="app">
+    <!-- Login Screen -->
+    <LoginScreen v-if="!isAuthenticated" />
+
+    <!-- Main App (when authenticated) -->
+    <template v-else>
+      <!-- User Info Bar -->
+      <div class="user-bar">
+        <div class="user-info">
+          <img v-if="user?.picture" :src="user.picture" alt="Profile" class="user-avatar" />
+          <span class="user-name">{{ user?.name || user?.email }}</span>
+        </div>
+        <button @click="handleLogout" class="logout-btn">Logout</button>
+      </div>
+
     <div class="gantt-container">
+      <div class="project-filter">
+        <label>View Project:</label>
+        <select v-model="selectedProject" @change="filterByProject(selectedProject)">
+          <option value="all">All Projects</option>
+          <option v-for="project in projectList" :key="project" :value="project">{{ project }}</option>
+        </select>
+      </div>
       <div class="gantt-chart-wrapper">
         <div class="timeline-header">
           <div class="corner-cell"></div>
-          <div class="timeline-months">
+          <div class="timeline-months" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
             <div v-for="month in months" :key="month.key" class="month-header" :style="{ width: month.width + 'px' }">
               {{ month.name }}
             </div>
@@ -13,8 +34,8 @@
 
         <div class="timeline-days-row">
           <div class="corner-cell"></div>
-          <div class="timeline-days">
-            <div v-for="day in days" :key="day.key" class="day-cell" :class="{ 'weekend': day.isWeekend }">
+          <div class="timeline-days" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
+            <div v-for="day in days" :key="day.key" class="day-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }">
               {{ day.day }}
             </div>
           </div>
@@ -24,48 +45,73 @@
           <div v-for="section in sections" :key="section.id" class="section-group">
             <div class="task-row section-title-row">
               <div class="row-number"></div>
-              <div class="timeline-area">
-                <div class="grid-lines">
-                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }"></div>
+              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
+                <div class="grid-lines" :style="{ width: timelineWidth + 'px' }">
+                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }"></div>
                 </div>
-                <div class="section-title-text">{{ section.name }}</div>
+                <div class="section-header">
+                  <div class="section-title-text">{{ section.name }}</div>
+                  <div v-if="section.sub_header" class="section-sub-header">{{ section.sub_header }}</div>
+                </div>
               </div>
             </div>
 
-            <div v-for="(task, index) in section.tasks" :key="task.id" class="task-row">
-              <div class="row-number">{{ task.rowNumber }}</div>
-              <div class="timeline-area">
-                <div class="grid-lines">
-                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }"></div>
+            <div v-for="row in section.rows" :key="row.rowIndex" class="task-row">
+              <div class="row-number">{{ row.rowNumber }}</div>
+              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
+                <div class="grid-lines" :style="{ width: timelineWidth + 'px' }">
+                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }"></div>
                 </div>
 
-                <div v-if="task.type === 'milestone'"
-                     class="milestone"
-                     :style="getMilestoneStyle(task)"
-                     :title="task.name">
-                  <svg width="20" height="20" viewBox="0 0 20 20">
-                    <polygon points="10,2 18,10 10,18 2,10" :fill="task.color || '#666'"/>
-                  </svg>
-                  <div class="milestone-label">{{ task.name }}</div>
-                </div>
+                <template v-for="task in row.tasks" :key="task.id">
+                  <div v-if="task.type === 'milestone'"
+                       class="milestone"
+                       :class="{ 'dragging': draggingTask && draggingTask.id === task.id }"
+                       :style="getMilestoneStyle(task)"
+                       :title="task.name"
+                       @mousedown="startMilestoneDrag($event, task)"
+                       @contextmenu.prevent="showContextMenu($event, task)">
+                    <svg width="20" height="20" viewBox="0 0 20 20">
+                      <polygon points="10,2 18,10 10,18 2,10" :fill="task.color || '#666'"/>
+                    </svg>
+                    <div class="milestone-label">{{ task.name }}</div>
+                    <button class="delete-btn" @click.stop="confirmDelete(task)" title="Delete">×</button>
+                  </div>
 
-                <div v-else-if="task.type === 'task'"
-                     class="task-bar"
-                     :style="getTaskBarStyle(task)"
-                     @click="selectTask(task)"
-                     :title="task.name">
-                  <span class="task-date-start">{{ getTaskStartDay(task) }}</span>
-                  <span class="task-text">{{ task.name }}</span>
-                  <span class="task-date-end">{{ getTaskEndDay(task) }}</span>
-                </div>
+                  <div v-else-if="task.type === 'task'"
+                       class="task-bar"
+                       :class="{ 'dragging': draggingTask && draggingTask.id === task.id }"
+                       :style="getTaskBarStyle(task)"
+                       :title="task.name"
+                       @contextmenu.prevent="showContextMenu($event, task)">
+                    <div class="resize-handle resize-start" @mousedown="startTaskDrag($event, task, 'resize-start')"></div>
+                    <div class="task-bar-content" @mousedown="startTaskDrag($event, task, 'move')">
+                      <span class="task-date-start">{{ getTaskStartDay(task) }}</span>
+                      <span class="task-text">{{ task.name }}</span>
+                      <span class="task-date-end">{{ getTaskEndDay(task) }}</span>
+                    </div>
+                    <div class="resize-handle resize-end" @mousedown="startTaskDrag($event, task, 'resize-end')"></div>
+                    <button class="delete-btn" @click.stop="confirmDelete(task)" title="Delete">×</button>
+                  </div>
 
-                <svg v-if="task.dependencies && task.dependencies.length" class="dependency-lines">
-                  <path v-for="dep in getDependencyPaths(task)" :key="dep.id"
-                        :d="dep.path"
-                        stroke="#666"
-                        stroke-width="1"
-                        fill="none"
-                        marker-end="url(#arrowhead)"/>
+                  <div v-else-if="task.type === 'text'"
+                       class="text-item"
+                       :style="getTextStyle(task)"
+                       @contextmenu.prevent="showContextMenu($event, task)">
+                    {{ task.name }}
+                    <button class="delete-btn text-delete" @click.stop="confirmDelete(task)" title="Delete">×</button>
+                  </div>
+                </template>
+
+                <svg v-if="row.tasks.some(t => t.dependencies && t.dependencies.length)" class="dependency-lines">
+                  <template v-for="task in row.tasks" :key="'dep-' + task.id">
+                    <path v-for="dep in getDependencyPaths(task)" :key="dep.id"
+                          :d="dep.path"
+                          stroke="#666"
+                          stroke-width="1"
+                          fill="none"
+                          marker-end="url(#arrowhead)"/>
+                  </template>
                 </svg>
               </div>
             </div>
@@ -93,12 +139,18 @@
     </div>
 
     <div v-if="showModal" class="modal" @click.self="closeModal">
-      <div class="modal-content">
-        <div class="modal-header">
+      <div class="modal-content" :style="getModalStyle()">
+        <div class="modal-header" @mousedown="startDrag">
           <h2>{{ modalTitle }}</h2>
-          <button @click="closeModal" class="close-btn">&times;</button>
+          <button @click.stop="closeModal" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
+          <div v-if="formErrors.length > 0" class="form-errors">
+            <div v-for="(error, index) in formErrors" :key="index" class="error-message">
+              {{ error }}
+            </div>
+          </div>
+
           <div v-if="modalType === 'milestone'" class="form-group">
             <label>Milestone Name:</label>
             <input v-model="milestoneForm.name" type="text" placeholder="Enter milestone name">
@@ -106,8 +158,16 @@
             <input v-model="milestoneForm.date" type="date">
             <label>Section:</label>
             <select v-model="milestoneForm.section">
+              <option value="" disabled>Select a section</option>
               <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
+              <option value="__new__">+ Create New Section</option>
             </select>
+            <div v-if="milestoneForm.section === '__new__'">
+              <label>New Section Name:</label>
+              <input v-model="milestoneForm.newSectionName" type="text" placeholder="Enter section name">
+            </div>
+            <label>Row (optional - leave empty for new row):</label>
+            <input v-model.number="milestoneForm.row_index" type="number" min="1" placeholder="Row number">
             <label>Color:</label>
             <input v-model="milestoneForm.color" type="color">
           </div>
@@ -121,8 +181,16 @@
             <input v-model="timelineForm.endDate" type="date">
             <label>Section:</label>
             <select v-model="timelineForm.section">
+              <option value="" disabled>Select a section</option>
               <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
+              <option value="__new__">+ Create New Section</option>
             </select>
+            <div v-if="timelineForm.section === '__new__'">
+              <label>New Section Name:</label>
+              <input v-model="timelineForm.newSectionName" type="text" placeholder="Enter section name">
+            </div>
+            <label>Row (optional - leave empty for new row):</label>
+            <input v-model.number="timelineForm.row_index" type="number" min="1" placeholder="Row number">
             <label>Color:</label>
             <input v-model="timelineForm.color" type="color">
           </div>
@@ -135,13 +203,101 @@
               Move existing activities
             </label>
           </div>
+
+          <div v-else-if="modalType === 'workDays'" class="form-group">
+            <label>Select Work Days:</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" v-model="workDaysForm.monday"> Monday</label>
+              <label><input type="checkbox" v-model="workDaysForm.tuesday"> Tuesday</label>
+              <label><input type="checkbox" v-model="workDaysForm.wednesday"> Wednesday</label>
+              <label><input type="checkbox" v-model="workDaysForm.thursday"> Thursday</label>
+              <label><input type="checkbox" v-model="workDaysForm.friday"> Friday</label>
+              <label><input type="checkbox" v-model="workDaysForm.saturday"> Saturday</label>
+              <label><input type="checkbox" v-model="workDaysForm.sunday"> Sunday</label>
+            </div>
+          </div>
+
+          <div v-else-if="modalType === 'scale'" class="form-group">
+            <label>Day Width (pixels):</label>
+            <input v-model.number="scaleForm.dayWidth" type="number" min="15" max="200" step="5">
+            <label>Scale Preset:</label>
+            <select v-model="scaleForm.preset" @change="applyScalePreset">
+              <option value="compact">Compact (15px)</option>
+              <option value="normal">Normal (25px)</option>
+              <option value="wide">Wide (35px)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          <div v-else-if="modalType === 'text'" class="form-group">
+            <label>Text Content:</label>
+            <input v-model="textForm.content" type="text" placeholder="Enter text">
+            <label>Section:</label>
+            <select v-model="textForm.section">
+              <option value="" disabled>Select a section</option>
+              <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
+              <option value="__new__">+ Create New Section</option>
+            </select>
+            <div v-if="textForm.section === '__new__'">
+              <label>New Section Name:</label>
+              <input v-model="textForm.newSectionName" type="text" placeholder="Enter section name">
+            </div>
+            <label>Row (optional):</label>
+            <input v-model.number="textForm.row_index" type="number" min="1" placeholder="Row number">
+            <label>Font Size:</label>
+            <select v-model="textForm.fontSize">
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+            <label>Style:</label>
+            <div class="checkbox-group horizontal">
+              <label><input type="checkbox" v-model="textForm.bold"> Bold</label>
+              <label><input type="checkbox" v-model="textForm.italic"> Italic</label>
+              <label><input type="checkbox" v-model="textForm.underline"> Underline</label>
+            </div>
+            <label>Color:</label>
+            <input v-model="textForm.color" type="color">
+          </div>
         </div>
         <div class="modal-footer">
-          <button @click="closeModal" class="btn btn-secondary">Cancel</button>
-          <button @click="saveModalData" class="btn btn-primary">Save</button>
+          <button @click="closeModal" class="btn btn-secondary" :disabled="isSaving">Cancel</button>
+          <button @click="saveModalData" class="btn btn-primary" :disabled="isSaving">
+            {{ isSaving ? 'Saving...' : 'Save' }}
+          </button>
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteConfirm" class="modal" @click.self="cancelDelete">
+      <div class="modal-content delete-confirm-modal" :style="getDeleteModalStyle()">
+        <div class="modal-header delete-header" @mousedown="startDeleteDrag">
+          <h2>Confirm Delete</h2>
+          <button @click.stop="cancelDelete" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="warning-icon">⚠️</span>
+            <p>Are you sure you want to delete this item?</p>
+          </div>
+          <div class="delete-item-info">
+            <p><strong>Type:</strong> {{ taskToDelete?.type }}</p>
+            <p><strong>Name:</strong> {{ taskToDelete?.name }}</p>
+            <p v-if="taskToDelete?.type === 'task'"><strong>Dates:</strong> {{ taskToDelete?.start_date }} to {{ taskToDelete?.end_date }}</p>
+            <p v-if="taskToDelete?.type === 'milestone'"><strong>Date:</strong> {{ taskToDelete?.start_date }}</p>
+          </div>
+          <p class="delete-notice">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button @click="cancelDelete" class="btn btn-secondary">Cancel</button>
+          <button @click="deleteTask" class="btn btn-danger" :disabled="isDeleting">
+            {{ isDeleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    </template>
   </div>
 </template>
 
@@ -149,23 +305,56 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import LoginScreen from './components/LoginScreen.vue'
+import { useAuth } from './composables/useAuth'
 
 export default {
   name: 'App',
+  components: {
+    LoginScreen
+  },
   setup() {
-    const startDate = ref(dayjs('2023-10-23'))
-    const endDate = ref(dayjs('2024-02-29'))
+    const { user, isAuthenticated, isLoading: authLoading, verifyToken, logout } = useAuth()
+
+    const handleLogout = () => {
+      logout()
+    }
+    const startDate = ref(dayjs())
+    const endDate = ref(dayjs().add(3, 'month'))
     const sections = ref([])
     const selectedTask = ref(null)
     const showModal = ref(false)
     const modalType = ref('')
     const modalTitle = ref('')
+    const formErrors = ref([])
+    const isSaving = ref(false)
+
+    // Modal dragging state
+    const modalPosition = ref({ x: null, y: null })
+    const isDragging = ref(false)
+    const dragOffset = ref({ x: 0, y: 0 })
+
+    // Delete confirmation state
+    const showDeleteConfirm = ref(false)
+    const taskToDelete = ref(null)
+    const isDeleting = ref(false)
+    const deleteModalPosition = ref({ x: null, y: null })
+    const isDeleteDragging = ref(false)
+    const deleteDragOffset = ref({ x: 0, y: 0 })
+
+    // Task bar dragging state
+    const draggingTask = ref(null)
+    const dragMode = ref(null) // 'move', 'resize-start', 'resize-end'
+    const dragStartX = ref(0)
+    const originalTaskDates = ref({ start: null, end: null })
 
     const milestoneForm = ref({
       name: '',
       date: '',
       section: '',
-      color: '#666666'
+      newSectionName: '',
+      color: '#666666',
+      row_index: null
     })
 
     const timelineForm = ref({
@@ -173,11 +362,59 @@ export default {
       startDate: '',
       endDate: '',
       section: '',
-      color: '#4CAF50'
+      newSectionName: '',
+      color: '#4CAF50',
+      row_index: null
     })
+
+    const workDaysForm = ref({
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false
+    })
+
+    const scaleForm = ref({
+      dayWidth: 25,
+      preset: 'normal'
+    })
+
+    const textForm = ref({
+      content: '',
+      section: '',
+      newSectionName: '',
+      row_index: null,
+      fontSize: 'medium',
+      bold: false,
+      italic: false,
+      underline: false,
+      color: '#000000'
+    })
+
+    const dayWidth = ref(25)
 
     const projectStartDate = ref('')
     const moveExisting = ref(false)
+
+    // Project filtering
+    const selectedProject = ref('all')
+    const allSections = ref([])
+
+    const isNonWorkDay = (dayOfWeek) => {
+      const dayMap = {
+        0: !workDaysForm.value.sunday,
+        1: !workDaysForm.value.monday,
+        2: !workDaysForm.value.tuesday,
+        3: !workDaysForm.value.wednesday,
+        4: !workDaysForm.value.thursday,
+        5: !workDaysForm.value.friday,
+        6: !workDaysForm.value.saturday
+      }
+      return dayMap[dayOfWeek]
+    }
 
     const days = computed(() => {
       const result = []
@@ -186,7 +423,7 @@ export default {
         result.push({
           key: current.format('YYYY-MM-DD'),
           day: current.format('D'),
-          isWeekend: current.day() === 0 || current.day() === 6,
+          isWeekend: isNonWorkDay(current.day()),
           month: current.month(),
           year: current.year()
         })
@@ -197,12 +434,16 @@ export default {
 
     const months = computed(() => {
       const monthsMap = new Map()
+      let lastYear = null
       days.value.forEach(day => {
         const key = `${day.year}-${day.month}`
         if (!monthsMap.has(key)) {
+          // Show year when it changes or on first month
+          const showYear = lastYear === null || day.year !== lastYear
+          lastYear = day.year
           monthsMap.set(key, {
             key,
-            name: dayjs().month(day.month).format('MMMM') + (day.month === 0 ? ` ${day.year}` : ''),
+            name: dayjs().month(day.month).format('MMMM') + (showYear ? ` ${day.year}` : ''),
             count: 0
           })
         }
@@ -211,15 +452,20 @@ export default {
 
       return Array.from(monthsMap.values()).map(month => ({
         ...month,
-        width: month.count * 25
+        width: month.count * dayWidth.value
       }))
+    })
+
+    // Total timeline width based on number of days
+    const timelineWidth = computed(() => {
+      return days.value.length * dayWidth.value
     })
 
     const getMilestoneStyle = (task) => {
       const taskDate = dayjs(task.start_date)
       const dayIndex = taskDate.diff(startDate.value, 'day')
       return {
-        left: `${dayIndex * 25 + 5}px`
+        left: `${dayIndex * dayWidth.value + 5}px`
       }
     }
 
@@ -230,8 +476,8 @@ export default {
       const duration = taskEnd.diff(taskStart, 'day') + 1
 
       return {
-        left: `${dayIndex * 25}px`,
-        width: `${duration * 25}px`,
+        left: `${dayIndex * dayWidth.value}px`,
+        width: `${duration * dayWidth.value}px`,
         backgroundColor: task.color || '#4CAF50'
       }
     }
@@ -254,6 +500,23 @@ export default {
       return taskEnd.format('D')
     }
 
+    const getTextStyle = (task) => {
+      let styles = {}
+      try {
+        const textStyles = task.notes ? JSON.parse(task.notes) : {}
+        styles = {
+          color: task.color || '#000',
+          fontSize: textStyles.fontSize === 'small' ? '10px' : textStyles.fontSize === 'large' ? '14px' : '12px',
+          fontWeight: textStyles.bold ? 'bold' : 'normal',
+          fontStyle: textStyles.italic ? 'italic' : 'normal',
+          textDecoration: textStyles.underline ? 'underline' : 'none'
+        }
+      } catch (e) {
+        styles = { color: task.color || '#000' }
+      }
+      return styles
+    }
+
     const setStartDate = () => {
       modalType.value = 'startDate'
       modalTitle.value = 'Set Project Start Date'
@@ -262,11 +525,23 @@ export default {
     }
 
     const selectWorkDays = () => {
-      alert('Work days selection - Feature coming soon')
+      modalType.value = 'workDays'
+      modalTitle.value = 'Select Work Days'
+      showModal.value = true
     }
 
     const setScale = () => {
-      alert('Scale settings - Feature coming soon')
+      modalType.value = 'scale'
+      modalTitle.value = 'Set Scale'
+      scaleForm.value.dayWidth = dayWidth.value
+      scaleForm.value.preset = dayWidth.value === 15 ? 'compact' : dayWidth.value === 25 ? 'normal' : dayWidth.value === 35 ? 'wide' : 'custom'
+      showModal.value = true
+    }
+
+    const applyScalePreset = () => {
+      if (scaleForm.value.preset === 'compact') scaleForm.value.dayWidth = 15
+      else if (scaleForm.value.preset === 'normal') scaleForm.value.dayWidth = 25
+      else if (scaleForm.value.preset === 'wide') scaleForm.value.dayWidth = 35
     }
 
     const createMilestone = () => {
@@ -275,8 +550,10 @@ export default {
       milestoneForm.value = {
         name: '',
         date: dayjs().format('YYYY-MM-DD'),
-        section: sections.value[0]?.id || '',
-        color: '#666666'
+        section: sections.value.length > 0 ? sections.value[0].id : '__new__',
+        newSectionName: '',
+        color: '#666666',
+        row_index: null
       }
       showModal.value = true
     }
@@ -288,61 +565,429 @@ export default {
         name: '',
         startDate: dayjs().format('YYYY-MM-DD'),
         endDate: dayjs().add(7, 'day').format('YYYY-MM-DD'),
-        section: sections.value[0]?.id || '',
-        color: '#4CAF50'
+        section: sections.value.length > 0 ? sections.value[0].id : '__new__',
+        newSectionName: '',
+        color: '#4CAF50',
+        row_index: null
       }
       showModal.value = true
     }
 
     const addTextLine = () => {
-      alert('Add text line - Feature coming soon')
+      modalType.value = 'text'
+      modalTitle.value = 'Add Text Line'
+      textForm.value = {
+        content: '',
+        section: sections.value.length > 0 ? sections.value[0].id : '__new__',
+        newSectionName: '',
+        row_index: null,
+        fontSize: 'medium',
+        bold: false,
+        italic: false,
+        underline: false,
+        color: '#000000'
+      }
+      showModal.value = true
     }
 
     const closeModal = () => {
       showModal.value = false
       modalType.value = ''
+      formErrors.value = []
+      modalPosition.value = { x: null, y: null }
+    }
+
+    // Modal dragging functions
+    const startDrag = (e) => {
+      if (e.target.closest('.close-btn')) return
+      isDragging.value = true
+      const modal = e.target.closest('.modal-content')
+      const rect = modal.getBoundingClientRect()
+      dragOffset.value = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      }
+      document.addEventListener('mousemove', onDrag)
+      document.addEventListener('mouseup', stopDrag)
+    }
+
+    const onDrag = (e) => {
+      if (!isDragging.value) return
+      modalPosition.value = {
+        x: e.clientX - dragOffset.value.x,
+        y: e.clientY - dragOffset.value.y
+      }
+    }
+
+    const stopDrag = () => {
+      isDragging.value = false
+      document.removeEventListener('mousemove', onDrag)
+      document.removeEventListener('mouseup', stopDrag)
+    }
+
+    const getModalStyle = () => {
+      if (modalPosition.value.x === null) return {}
+      return {
+        position: 'fixed',
+        left: modalPosition.value.x + 'px',
+        top: modalPosition.value.y + 'px',
+        transform: 'none'
+      }
+    }
+
+    // Delete confirmation functions
+    const confirmDelete = (task) => {
+      taskToDelete.value = task
+      showDeleteConfirm.value = true
+      deleteModalPosition.value = { x: null, y: null }
+    }
+
+    const cancelDelete = () => {
+      showDeleteConfirm.value = false
+      taskToDelete.value = null
+      deleteModalPosition.value = { x: null, y: null }
+    }
+
+    const deleteTask = async () => {
+      if (!taskToDelete.value) return
+
+      isDeleting.value = true
+      try {
+        await axios.delete(`/api/tasks/${taskToDelete.value.id}`)
+        await loadTasks()
+        cancelDelete()
+      } catch (error) {
+        console.error('Error deleting task:', error)
+        alert('Failed to delete: ' + (error.response?.data?.error || error.message))
+      } finally {
+        isDeleting.value = false
+      }
+    }
+
+    const showContextMenu = (e, task) => {
+      // Right-click shows delete confirmation
+      confirmDelete(task)
+    }
+
+    // Delete modal dragging
+    const startDeleteDrag = (e) => {
+      if (e.target.closest('.close-btn')) return
+      isDeleteDragging.value = true
+      const modal = e.target.closest('.modal-content')
+      const rect = modal.getBoundingClientRect()
+      deleteDragOffset.value = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      }
+      document.addEventListener('mousemove', onDeleteDrag)
+      document.addEventListener('mouseup', stopDeleteDrag)
+    }
+
+    const onDeleteDrag = (e) => {
+      if (!isDeleteDragging.value) return
+      deleteModalPosition.value = {
+        x: e.clientX - deleteDragOffset.value.x,
+        y: e.clientY - deleteDragOffset.value.y
+      }
+    }
+
+    const stopDeleteDrag = () => {
+      isDeleteDragging.value = false
+      document.removeEventListener('mousemove', onDeleteDrag)
+      document.removeEventListener('mouseup', stopDeleteDrag)
+    }
+
+    const getDeleteModalStyle = () => {
+      if (deleteModalPosition.value.x === null) return {}
+      return {
+        position: 'fixed',
+        left: deleteModalPosition.value.x + 'px',
+        top: deleteModalPosition.value.y + 'px',
+        transform: 'none'
+      }
+    }
+
+    // Validation functions
+    const validateMilestoneForm = () => {
+      const errors = []
+      if (!milestoneForm.value.name?.trim()) {
+        errors.push('Milestone name is required')
+      }
+      if (!milestoneForm.value.date) {
+        errors.push('Date is required')
+      }
+      if (!milestoneForm.value.section) {
+        errors.push('Section is required')
+      }
+      if (milestoneForm.value.section === '__new__' && !milestoneForm.value.newSectionName?.trim()) {
+        errors.push('New section name is required')
+      }
+      return errors
+    }
+
+    const validateTimelineForm = () => {
+      const errors = []
+      if (!timelineForm.value.name?.trim()) {
+        errors.push('Task name is required')
+      }
+      if (!timelineForm.value.startDate) {
+        errors.push('Start date is required')
+      }
+      if (!timelineForm.value.endDate) {
+        errors.push('End date is required')
+      }
+      if (timelineForm.value.startDate && timelineForm.value.endDate) {
+        if (dayjs(timelineForm.value.endDate).isBefore(dayjs(timelineForm.value.startDate))) {
+          errors.push('End date must be on or after start date')
+        }
+      }
+      if (!timelineForm.value.section) {
+        errors.push('Section is required')
+      }
+      if (timelineForm.value.section === '__new__' && !timelineForm.value.newSectionName?.trim()) {
+        errors.push('New section name is required')
+      }
+      return errors
+    }
+
+    const loadDateRange = async () => {
+      try {
+        const response = await axios.get('/api/date-range')
+        startDate.value = dayjs(response.data.start_date)
+        endDate.value = dayjs(response.data.end_date)
+      } catch (error) {
+        console.error('Error loading date range:', error)
+      }
+    }
+
+    // Task bar drag functions
+    const startTaskDrag = (e, task, mode) => {
+      e.preventDefault()
+      e.stopPropagation()
+      draggingTask.value = task
+      dragMode.value = mode
+      dragStartX.value = e.clientX
+      originalTaskDates.value = {
+        start: dayjs(task.start_date),
+        end: dayjs(task.end_date)
+      }
+      document.addEventListener('mousemove', onTaskDrag)
+      document.addEventListener('mouseup', stopTaskDrag)
+    }
+
+    const onTaskDrag = (e) => {
+      if (!draggingTask.value) return
+
+      const deltaX = e.clientX - dragStartX.value
+      const daysDelta = Math.round(deltaX / 25) // 25px per day
+
+      if (daysDelta === 0) return
+
+      const task = draggingTask.value
+
+      if (dragMode.value === 'move') {
+        // Move the entire bar
+        task.start_date = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+        task.end_date = originalTaskDates.value.end.add(daysDelta, 'day').format('YYYY-MM-DD')
+      } else if (dragMode.value === 'resize-start') {
+        // Resize from start
+        const newStart = originalTaskDates.value.start.add(daysDelta, 'day')
+        if (newStart.isBefore(originalTaskDates.value.end) || newStart.isSame(originalTaskDates.value.end)) {
+          task.start_date = newStart.format('YYYY-MM-DD')
+        }
+      } else if (dragMode.value === 'resize-end') {
+        // Resize from end
+        const newEnd = originalTaskDates.value.end.add(daysDelta, 'day')
+        if (newEnd.isAfter(originalTaskDates.value.start) || newEnd.isSame(originalTaskDates.value.start)) {
+          task.end_date = newEnd.format('YYYY-MM-DD')
+        }
+      }
+    }
+
+    const stopTaskDrag = async () => {
+      if (draggingTask.value) {
+        // Save the updated task to database
+        try {
+          await axios.put(`/api/tasks/${draggingTask.value.id}`, {
+            start_date: draggingTask.value.start_date,
+            end_date: draggingTask.value.end_date
+          })
+          await loadDateRange()
+        } catch (error) {
+          console.error('Error updating task:', error)
+          // Revert on error
+          draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
+          draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+        }
+      }
+      draggingTask.value = null
+      dragMode.value = null
+      document.removeEventListener('mousemove', onTaskDrag)
+      document.removeEventListener('mouseup', stopTaskDrag)
+    }
+
+    // Milestone drag function
+    const startMilestoneDrag = (e, task) => {
+      e.preventDefault()
+      e.stopPropagation()
+      draggingTask.value = task
+      dragMode.value = 'move'
+      dragStartX.value = e.clientX
+      originalTaskDates.value = {
+        start: dayjs(task.start_date),
+        end: dayjs(task.end_date)
+      }
+      document.addEventListener('mousemove', onMilestoneDrag)
+      document.addEventListener('mouseup', stopMilestoneDrag)
+    }
+
+    const onMilestoneDrag = (e) => {
+      if (!draggingTask.value) return
+
+      const deltaX = e.clientX - dragStartX.value
+      const daysDelta = Math.round(deltaX / 25)
+
+      if (daysDelta === 0) return
+
+      const task = draggingTask.value
+      const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+      task.start_date = newDate
+      task.end_date = newDate
+    }
+
+    const stopMilestoneDrag = async () => {
+      if (draggingTask.value) {
+        try {
+          await axios.put(`/api/tasks/${draggingTask.value.id}`, {
+            start_date: draggingTask.value.start_date,
+            end_date: draggingTask.value.end_date
+          })
+          await loadDateRange()
+        } catch (error) {
+          console.error('Error updating milestone:', error)
+          draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
+          draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+        }
+      }
+      draggingTask.value = null
+      dragMode.value = null
+      document.removeEventListener('mousemove', onMilestoneDrag)
+      document.removeEventListener('mouseup', stopMilestoneDrag)
     }
 
     const saveModalData = async () => {
-      if (modalType.value === 'milestone') {
-        const newTask = {
-          name: milestoneForm.value.name,
-          building: sections.value.find(s => s.id === milestoneForm.value.section)?.name || 'Other',
-          start_date: milestoneForm.value.date,
-          end_date: milestoneForm.value.date,
-          type: 'milestone',
-          color: milestoneForm.value.color,
-          progress: 0
-        }
+      formErrors.value = []
+      isSaving.value = true
 
-        try {
+      try {
+        if (modalType.value === 'milestone') {
+          const errors = validateMilestoneForm()
+          if (errors.length > 0) {
+            formErrors.value = errors
+            isSaving.value = false
+            return
+          }
+
+          // Determine building name: new section or existing
+          const buildingName = milestoneForm.value.section === '__new__'
+            ? milestoneForm.value.newSectionName.trim()
+            : sections.value.find(s => s.id === milestoneForm.value.section)?.name || 'Other'
+
+          const newTask = {
+            name: milestoneForm.value.name.trim(),
+            building: buildingName,
+            start_date: milestoneForm.value.date,
+            end_date: milestoneForm.value.date,
+            type: 'milestone',
+            color: milestoneForm.value.color,
+            progress: 0,
+            row_index: milestoneForm.value.row_index
+          }
+
+          await axios.post('/api/tasks', newTask)
+          await loadDateRange()
+          await loadTasks()
+          closeModal()
+        } else if (modalType.value === 'timeline') {
+          const errors = validateTimelineForm()
+          if (errors.length > 0) {
+            formErrors.value = errors
+            isSaving.value = false
+            return
+          }
+
+          // Determine building name: new section or existing
+          const buildingName = timelineForm.value.section === '__new__'
+            ? timelineForm.value.newSectionName.trim()
+            : sections.value.find(s => s.id === timelineForm.value.section)?.name || 'Other'
+
+          const newTask = {
+            name: timelineForm.value.name.trim(),
+            building: buildingName,
+            start_date: timelineForm.value.startDate,
+            end_date: timelineForm.value.endDate,
+            type: 'task',
+            color: timelineForm.value.color,
+            progress: 0,
+            row_index: timelineForm.value.row_index
+          }
+
+          await axios.post('/api/tasks', newTask)
+          await loadDateRange()
+          await loadTasks()
+          closeModal()
+        } else if (modalType.value === 'startDate') {
+          startDate.value = dayjs(projectStartDate.value)
+          closeModal()
+        } else if (modalType.value === 'workDays') {
+          // Work days are stored locally - affects weekend highlighting
+          closeModal()
+        } else if (modalType.value === 'scale') {
+          dayWidth.value = scaleForm.value.dayWidth
+          closeModal()
+        } else if (modalType.value === 'text') {
+          if (!textForm.value.content?.trim()) {
+            formErrors.value = ['Text content is required']
+            isSaving.value = false
+            return
+          }
+          if (!textForm.value.section) {
+            formErrors.value = ['Section is required']
+            isSaving.value = false
+            return
+          }
+
+          const buildingName = textForm.value.section === '__new__'
+            ? textForm.value.newSectionName.trim()
+            : sections.value.find(s => s.id === textForm.value.section)?.name || 'Other'
+
+          const newTask = {
+            name: textForm.value.content.trim(),
+            building: buildingName,
+            start_date: dayjs().format('YYYY-MM-DD'),
+            end_date: dayjs().format('YYYY-MM-DD'),
+            type: 'text',
+            color: textForm.value.color,
+            progress: 0,
+            row_index: textForm.value.row_index,
+            notes: JSON.stringify({
+              fontSize: textForm.value.fontSize,
+              bold: textForm.value.bold,
+              italic: textForm.value.italic,
+              underline: textForm.value.underline
+            })
+          }
+
           await axios.post('/api/tasks', newTask)
           await loadTasks()
           closeModal()
-        } catch (error) {
-          console.error('Error creating milestone:', error)
         }
-      } else if (modalType.value === 'timeline') {
-        const newTask = {
-          name: timelineForm.value.name,
-          building: sections.value.find(s => s.id === timelineForm.value.section)?.name || 'Other',
-          start_date: timelineForm.value.startDate,
-          end_date: timelineForm.value.endDate,
-          type: 'task',
-          color: timelineForm.value.color,
-          progress: 0
-        }
-
-        try {
-          await axios.post('/api/tasks', newTask)
-          await loadTasks()
-          closeModal()
-        } catch (error) {
-          console.error('Error creating timeline:', error)
-        }
-      } else if (modalType.value === 'startDate') {
-        startDate.value = dayjs(projectStartDate.value)
-        closeModal()
+      } catch (error) {
+        console.error('Error saving:', error)
+        const errorMsg = error.response?.data?.error || error.message || 'An error occurred while saving'
+        formErrors.value = [errorMsg]
+      } finally {
+        isSaving.value = false
       }
     }
 
@@ -360,394 +1005,74 @@ export default {
           grouped[building].push(task)
         })
 
-        sections.value = Object.keys(grouped).map((name, index) => ({
-          id: index + 1,
-          name,
-          tasks: grouped[name].map((task, taskIndex) => ({
-            ...task,
-            rowNumber: taskIndex + 1
+        // Process each section to support multiple tasks per row
+        allSections.value = Object.keys(grouped).map((name, index) => {
+          const sectionTasks = grouped[name]
+
+          // Group tasks by row_index, null row_index gets its own row
+          const rowGroups = {}
+          let nextAutoRow = 1
+
+          sectionTasks.forEach(task => {
+            const rowIdx = task.row_index || `auto_${nextAutoRow++}`
+            if (!rowGroups[rowIdx]) {
+              rowGroups[rowIdx] = []
+            }
+            rowGroups[rowIdx].push(task)
+          })
+
+          // Convert to array of rows with multiple tasks
+          const rows = Object.entries(rowGroups).map(([rowIdx, rowTasks], rowIndex) => ({
+            rowNumber: rowIndex + 1,
+            rowIndex: rowIdx,
+            tasks: rowTasks
           }))
-        }))
+
+          return {
+            id: index + 1,
+            name,
+            sub_header: sectionTasks[0]?.sub_header || null,
+            rows
+          }
+        })
+
+        // Apply filter
+        if (selectedProject.value === 'all') {
+          sections.value = allSections.value
+        } else {
+          sections.value = allSections.value.filter(s => s.name === selectedProject.value)
+        }
       } catch (error) {
         console.error('Error loading tasks:', error)
       }
     }
 
-    const initializeSampleData = async () => {
-      const sampleTasks = [
-        {
-          name: 'Auburn School District # 408',
-          building: 'Auburn School District # 408',
-          type: 'section',
-          start_date: '2023-10-23',
-          end_date: '2023-10-23',
-          progress: 0,
-          color: '#2196F3'
-        },
-        {
-          name: 'Administration Building Portable #2',
-          building: 'Auburn School District # 408',
-          type: 'text',
-          start_date: '2023-10-23',
-          end_date: '2023-10-23',
-          progress: 0,
-          color: '#000000'
-        },
-        {
-          name: 'Tie Down Inspection',
-          building: 'Auburn School District # 408',
-          company: 'Tie Down Inspection',
-          type: 'milestone',
-          start_date: '2023-10-27',
-          end_date: '2023-10-27',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'receive wood doors & frames',
-          building: 'Auburn School District # 408',
-          company: 'receive wood',
-          type: 'milestone',
-          start_date: '2023-11-03',
-          end_date: '2023-11-03',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'receive HM doors & frames',
-          building: 'Auburn School District # 408',
-          company: 'receive HM',
-          type: 'milestone',
-          start_date: '2023-11-10',
-          end_date: '2023-11-10',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Modular Set & Assembly (5)',
-          building: 'Auburn School District # 408',
-          company: 'Modular Set & Assembly (5)',
-          type: 'task',
-          start_date: '2023-10-30',
-          end_date: '2023-11-03',
-          progress: 0,
-          color: '#FF5722'
-        },
-        {
-          name: 'Interior Framing (8)',
-          building: 'Auburn School District # 408',
-          company: 'Interior Framing (8)',
-          type: 'task',
-          start_date: '2023-11-06',
-          end_date: '2023-11-15',
-          progress: 0,
-          color: '#4CAF50'
-        },
-        {
-          name: 'Frame permit (8)',
-          building: 'Auburn School District # 408',
-          company: 'Frame permit (8)',
-          type: 'task',
-          start_date: '2023-11-16',
-          end_date: '2023-11-17',
-          progress: 0,
-          color: '#9C27B0'
-        },
-        {
-          name: 'form & pour sidewalk (6)',
-          building: 'Auburn School District # 408',
-          company: 'form & pour',
-          type: 'task',
-          start_date: '2023-11-06',
-          end_date: '2023-11-13',
-          progress: 0,
-          color: '#607D8B'
-        },
-        {
-          name: 'electrical rough in (8)',
-          building: 'Auburn School District # 408',
-          type: 'task',
-          start_date: '2023-11-20',
-          end_date: '2023-11-30',
-          progress: 0,
-          color: '#000000'
-        },
-        {
-          name: 'connect storm drainage (4)',
-          building: 'Auburn School District # 408',
-          type: 'task',
-          start_date: '2023-10-30',
-          end_date: '2023-11-02',
-          progress: 0,
-          color: '#8B4513'
-        },
-        {
-          name: 'Re-roof building (5)',
-          building: 'Auburn School District # 408',
-          type: 'task',
-          start_date: '2023-11-27',
-          end_date: '2023-12-01',
-          progress: 0,
-          color: '#FF1744'
-        },
-        {
-          name: 'Construction Schedule',
-          building: 'Construction Schedule',
-          type: 'section',
-          start_date: '2023-10-23',
-          end_date: '2023-10-23',
-          progress: 0,
-          color: '#2196F3'
-        },
-        {
-          name: 'Roofing Helpers 7',
-          building: 'Construction Schedule',
-          type: 'milestone',
-          start_date: '2023-11-01',
-          end_date: '2023-11-01',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Electrical Inspection',
-          building: 'Construction Schedule',
-          type: 'milestone',
-          start_date: '2023-11-08',
-          end_date: '2023-11-08',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Plumbing team inspection',
-          building: 'Construction Schedule',
-          type: 'milestone',
-          start_date: '2023-11-15',
-          end_date: '2023-11-15',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'HVAC testing & supporting',
-          building: 'Construction Schedule',
-          type: 'milestone',
-          start_date: '2023-11-22',
-          end_date: '2023-11-22',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Final inspection',
-          building: 'Construction Schedule',
-          type: 'milestone',
-          start_date: '2023-12-15',
-          end_date: '2023-12-15',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Holiday Shut Down',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-12-22',
-          end_date: '2024-01-02',
-          progress: 0,
-          color: '#9E9E9E'
-        },
-        {
-          name: 'exterior painting as weather permits (23)',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-11-20',
-          end_date: '2023-12-20',
-          progress: 0,
-          color: '#E91E63'
-        },
-        {
-          name: 'landscape (17)',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-12-04',
-          end_date: '2023-12-26',
-          progress: 0,
-          color: '#4CAF50'
-        },
-        {
-          name: 'rough in plumbing (4)',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-11-27',
-          end_date: '2023-11-30',
-          progress: 0,
-          color: '#2196F3'
-        },
-        {
-          name: 'rough in mechanical (8)',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-11-13',
-          end_date: '2023-11-22',
-          progress: 0,
-          color: '#FF9800'
-        },
-        {
-          name: 'rough in electrical (8)',
-          building: 'Construction Schedule',
-          type: 'task',
-          start_date: '2023-12-11',
-          end_date: '2023-12-20',
-          progress: 0,
-          color: '#F44336'
-        },
-        {
-          name: 'Modern Building Systems Inc.',
-          building: 'Modern Building Systems Inc.',
-          type: 'section',
-          start_date: '2023-10-23',
-          end_date: '2023-10-23',
-          progress: 0,
-          color: '#2196F3'
-        },
-        {
-          name: 'Lake Tapps Construction Unltd.',
-          building: 'Modern Building Systems Inc.',
-          type: 'text',
-          start_date: '2023-10-23',
-          end_date: '2023-10-23',
-          progress: 0,
-          color: '#000000'
-        },
-        {
-          name: 'Building Final Inspection',
-          building: 'Modern Building Systems Inc.',
-          type: 'milestone',
-          start_date: '2024-01-15',
-          end_date: '2024-01-15',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Plumbing C.O.',
-          building: 'Modern Building Systems Inc.',
-          type: 'milestone',
-          start_date: '2024-01-22',
-          end_date: '2024-01-22',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'Electrical Final',
-          building: 'Modern Building Systems Inc.',
-          type: 'milestone',
-          start_date: '2024-02-05',
-          end_date: '2024-02-05',
-          progress: 0,
-          color: '#666666'
-        },
-        {
-          name: 'install hardware main building (11)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-08',
-          end_date: '2024-01-22',
-          progress: 0,
-          color: '#4CAF50'
-        },
-        {
-          name: 'wall doors & hardware (8)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-15',
-          end_date: '2024-01-24',
-          progress: 0,
-          color: '#00BCD4'
-        },
-        {
-          name: 'punch list / All Subs (5)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-29',
-          end_date: '2024-02-02',
-          progress: 0,
-          color: '#795548'
-        },
-        {
-          name: 'insulating (3)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-08',
-          end_date: '2024-01-10',
-          progress: 0,
-          color: '#9C27B0'
-        },
-        {
-          name: 'Floor Coats (5)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-22',
-          end_date: '2024-01-26',
-          progress: 0,
-          color: '#FF5722'
-        },
-        {
-          name: 'floor covering (4)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-15',
-          end_date: '2024-01-18',
-          progress: 0,
-          color: '#3F51B5'
-        },
-        {
-          name: 'plumbing trim (4)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-22',
-          end_date: '2024-01-25',
-          progress: 0,
-          color: '#009688'
-        },
-        {
-          name: 'HVAC trim (4)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-29',
-          end_date: '2024-02-01',
-          progress: 0,
-          color: '#FFC107'
-        },
-        {
-          name: 'electrical - systems trim - test (14)',
-          building: 'Modern Building Systems Inc.',
-          type: 'task',
-          start_date: '2024-01-15',
-          end_date: '2024-02-01',
-          progress: 0,
-          color: '#F44336'
-        }
-      ]
-
-      for (const task of sampleTasks) {
-        if (task.type !== 'section' && task.type !== 'text') {
-          try {
-            await axios.post('/api/tasks', task)
-          } catch (error) {
-            console.error('Error creating task:', task.name, error)
-          }
-        }
+    const filterByProject = (projectName) => {
+      selectedProject.value = projectName
+      if (projectName === 'all') {
+        sections.value = allSections.value
+      } else {
+        sections.value = allSections.value.filter(s => s.name === projectName)
       }
-
-      await loadTasks()
     }
 
-    onMounted(async () => {
-      await loadTasks()
+    const projectList = computed(() => {
+      return allSections.value.map(s => s.name)
+    })
 
-      if (sections.value.length === 0) {
-        await initializeSampleData()
+    onMounted(async () => {
+      // Verify token first
+      const isValid = await verifyToken()
+      if (isValid) {
+        await loadDateRange()
+        await loadTasks()
       }
     })
 
     return {
+      user,
+      isAuthenticated,
+      handleLogout,
       startDate,
       endDate,
       days,
@@ -759,10 +1084,22 @@ export default {
       modalTitle,
       milestoneForm,
       timelineForm,
+      workDaysForm,
+      scaleForm,
+      textForm,
+      dayWidth,
+      timelineWidth,
       projectStartDate,
       moveExisting,
+      formErrors,
+      isSaving,
+      modalPosition,
+      draggingTask,
+      selectedProject,
+      projectList,
       getMilestoneStyle,
       getTaskBarStyle,
+      getTextStyle,
       getDependencyPaths,
       selectTask,
       getTaskStartDay,
@@ -770,12 +1107,30 @@ export default {
       setStartDate,
       selectWorkDays,
       setScale,
+      applyScalePreset,
       createMilestone,
       createTimeline,
       addTextLine,
       closeModal,
       saveModalData,
-      loadTasks
+      loadTasks,
+      loadDateRange,
+      startDrag,
+      getModalStyle,
+      validateMilestoneForm,
+      validateTimelineForm,
+      startTaskDrag,
+      startMilestoneDrag,
+      filterByProject,
+      showDeleteConfirm,
+      taskToDelete,
+      isDeleting,
+      confirmDelete,
+      cancelDelete,
+      deleteTask,
+      showContextMenu,
+      startDeleteDrag,
+      getDeleteModalStyle
     }
   }
 }

@@ -1,25 +1,24 @@
 @echo off
-echo Cleaning up any existing Node processes...
-taskkill /F /IM node.exe 2>nul
+:: Gantt Chart Application Launcher
+:: Double-click to start the application
+
+:: Kill any existing Node processes
+taskkill /F /IM node.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+
+:: Start Backend (minimized)
+start /MIN "GanttBackend" cmd /k "cd /d C:\Users\zhend\Darrell\FinalGannt\backend && node server.js"
+
+:: Wait for backend
 timeout /t 2 /nobreak >nul
 
-echo Starting Gantt Chart Application...
-echo.
+:: Start Frontend (minimized)
+start /MIN "GanttFrontend" cmd /k "cd /d C:\Users\zhend\Darrell\FinalGannt\frontend && npm run dev"
+    
+:: Wait for frontend
+timeout /t 4 /nobreak >nul
 
-echo Starting Backend Server on port 3001...
-start "Gantt Backend" cmd /k "cd /d C:\Users\zhend\Darrell\GnattChart1st\backend && node server.js"
-
-echo Waiting for backend to initialize...
-timeout /t 3 /nobreak >nul
-
-echo Starting Frontend on port 3000...
-start "Gantt Frontend" cmd /k "cd /d C:\Users\zhend\Darrell\GnattChart1st\frontend && npm run dev"
-
-echo.
-echo Services are starting...
-echo Backend API: http://localhost:3001
-echo Frontend App: http://localhost:3000
-echo.
-echo Opening browser in 5 seconds...
-timeout /t 5 /nobreak >nul
+:: Open browser
 start http://localhost:3000
+
+exit
