@@ -1,19 +1,5 @@
 <template>
   <div id="app">
-    <!-- Login Screen -->
-    <LoginScreen v-if="!isAuthenticated" />
-
-    <!-- Main App (when authenticated) -->
-    <template v-else>
-      <!-- User Info Bar -->
-      <div class="user-bar">
-        <div class="user-info">
-          <img v-if="user?.picture" :src="user.picture" alt="Profile" class="user-avatar" />
-          <span class="user-name">{{ user?.name || user?.email }}</span>
-        </div>
-        <button @click="handleLogout" class="logout-btn">Logout</button>
-      </div>
-
     <div class="gantt-container">
       <div class="project-filter">
         <label>View Project:</label>
@@ -297,28 +283,43 @@
         </div>
       </div>
     </div>
-    </template>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { supabase } from './supabase'
 import dayjs from 'dayjs'
-import LoginScreen from './components/LoginScreen.vue'
-import { useAuth } from './composables/useAuth'
+
+// Data validation helpers
+const isValidHexColor = (color) => /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color)
+const isValidDate = (date) => dayjs(date).isValid()
+const sanitizeString = (str, maxLength = 255) => {
+  if (!str) return ''
+  return String(str).trim().slice(0, maxLength)
+}
+const sanitizeTaskData = (task) => {
+  const sanitized = {
+    name: sanitizeString(task.name, 255),
+    building: sanitizeString(task.building, 255) || 'Building 100',
+    start_date: isValidDate(task.start_date) ? task.start_date : dayjs().format('YYYY-MM-DD'),
+    end_date: isValidDate(task.end_date) ? task.end_date : dayjs().format('YYYY-MM-DD'),
+    type: ['task', 'milestone', 'section', 'text'].includes(task.type) ? task.type : 'task',
+    color: isValidHexColor(task.color) ? task.color : '#3498db',
+    progress: Math.min(100, Math.max(0, parseInt(task.progress) || 0)),
+    row_index: task.row_index ? parseInt(task.row_index) : null,
+    dependencies: sanitizeString(task.dependencies, 255),
+    notes: task.notes ? sanitizeString(task.notes, 5000) : null,
+    sub_header: task.sub_header ? sanitizeString(task.sub_header, 255) : null,
+    company: task.company ? sanitizeString(task.company, 255) : null,
+    symbol: task.symbol ? sanitizeString(task.symbol, 50) : null
+  }
+  return sanitized
+}
 
 export default {
   name: 'App',
-  components: {
-    LoginScreen
-  },
   setup() {
-    const { user, isAuthenticated, isLoading: authLoading, verifyToken, logout } = useAuth()
-
-    const handleLogout = () => {
-      logout()
-    }
     const startDate = ref(dayjs())
     const endDate = ref(dayjs().add(3, 'month'))
     const sections = ref([])
@@ -653,12 +654,16 @@ export default {
 
       isDeleting.value = true
       try {
-        await axios.delete(`/api/tasks/${taskToDelete.value.id}`)
+        const { error } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('id', taskToDelete.value.id)
+        if (error) throw error
         await loadTasks()
         cancelDelete()
       } catch (error) {
         console.error('Error deleting task:', error)
-        alert('Failed to delete: ' + (error.response?.data?.error || error.message))
+        alert('Failed to delete: ' + error.message)
       } finally {
         isDeleting.value = false
       }
@@ -752,9 +757,22 @@ export default {
 
     const loadDateRange = async () => {
       try {
-        const response = await axios.get('/api/date-range')
-        startDate.value = dayjs(response.data.start_date)
-        endDate.value = dayjs(response.data.end_date)
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('start_date, end_date')
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          const dates = data.flatMap(t => [new Date(t.start_date), new Date(t.end_date)])
+          const minDate = new Date(Math.min(...dates))
+          const maxDate = new Date(Math.max(...dates))
+          // Add 2 weeks padding
+          minDate.setDate(minDate.getDate() - 14)
+          maxDate.setDate(maxDate.getDate() + 14)
+          startDate.value = dayjs(minDate)
+          endDate.value = dayjs(maxDate)
+        }
       } catch (error) {
         console.error('Error loading date range:', error)
       }
@@ -808,10 +826,14 @@ export default {
       if (draggingTask.value) {
         // Save the updated task to database
         try {
-          await axios.put(`/api/tasks/${draggingTask.value.id}`, {
-            start_date: draggingTask.value.start_date,
-            end_date: draggingTask.value.end_date
-          })
+          const { error } = await supabase
+            .from('tasks')
+            .update({
+              start_date: draggingTask.value.start_date,
+              end_date: draggingTask.value.end_date
+            })
+            .eq('id', draggingTask.value.id)
+          if (error) throw error
           await loadDateRange()
         } catch (error) {
           console.error('Error updating task:', error)
@@ -858,10 +880,14 @@ export default {
     const stopMilestoneDrag = async () => {
       if (draggingTask.value) {
         try {
-          await axios.put(`/api/tasks/${draggingTask.value.id}`, {
-            start_date: draggingTask.value.start_date,
-            end_date: draggingTask.value.end_date
-          })
+          const { error } = await supabase
+            .from('tasks')
+            .update({
+              start_date: draggingTask.value.start_date,
+              end_date: draggingTask.value.end_date
+            })
+            .eq('id', draggingTask.value.id)
+          if (error) throw error
           await loadDateRange()
         } catch (error) {
           console.error('Error updating milestone:', error)
@@ -904,7 +930,8 @@ export default {
             row_index: milestoneForm.value.row_index
           }
 
-          await axios.post('/api/tasks', newTask)
+          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+          if (error) throw error
           await loadDateRange()
           await loadTasks()
           closeModal()
@@ -932,7 +959,8 @@ export default {
             row_index: timelineForm.value.row_index
           }
 
-          await axios.post('/api/tasks', newTask)
+          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+          if (error) throw error
           await loadDateRange()
           await loadTasks()
           closeModal()
@@ -978,13 +1006,14 @@ export default {
             })
           }
 
-          await axios.post('/api/tasks', newTask)
+          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+          if (error) throw error
           await loadTasks()
           closeModal()
         }
       } catch (error) {
         console.error('Error saving:', error)
-        const errorMsg = error.response?.data?.error || error.message || 'An error occurred while saving'
+        const errorMsg = error.message || 'An error occurred while saving'
         formErrors.value = [errorMsg]
       } finally {
         isSaving.value = false
@@ -993,8 +1022,14 @@ export default {
 
     const loadTasks = async () => {
       try {
-        const response = await axios.get('/api/tasks')
-        const tasks = response.data
+        const { data: tasks, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('building')
+          .order('row_index')
+          .order('start_date')
+
+        if (error) throw error
 
         const grouped = {}
         tasks.forEach(task => {
@@ -1061,18 +1096,11 @@ export default {
     })
 
     onMounted(async () => {
-      // Verify token first
-      const isValid = await verifyToken()
-      if (isValid) {
-        await loadDateRange()
-        await loadTasks()
-      }
+      await loadDateRange()
+      await loadTasks()
     })
 
     return {
-      user,
-      isAuthenticated,
-      handleLogout,
       startDate,
       endDate,
       days,
