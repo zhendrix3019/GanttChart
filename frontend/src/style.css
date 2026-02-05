@@ -133,10 +133,7 @@ body {
   transform: translateY(-50%);
   z-index: 5;
   background: white;
-  padding: 2px 8px 2px 5px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 2px 5px;
 }
 
 .section-title-text {
@@ -156,17 +153,17 @@ body {
 }
 
 .section-delete-btn {
-  position: relative;
-  right: auto;
-  top: auto;
-  transform: none;
-  width: 18px;
-  height: 18px;
+  position: absolute;
+  right: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
   background: #dc3545;
   color: white;
-  border: 1px solid #dc3545;
+  border: 2px solid white;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   display: none;
@@ -175,12 +172,11 @@ body {
   z-index: 20;
   padding: 0;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  flex-shrink: 0;
 }
 
 .section-delete-btn:hover {
   background: #c82333;
-  transform: scale(1.1);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .section-header:hover .section-delete-btn {
