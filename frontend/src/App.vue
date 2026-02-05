@@ -38,6 +38,7 @@
                 <div class="section-header">
                   <div class="section-title-text">{{ section.name }}</div>
                   <div v-if="section.sub_header" class="section-sub-header">{{ section.sub_header }}</div>
+                  <button class="section-delete-btn" @click.stop="confirmDeleteSection(section)" title="Delete Section">×</button>
                 </div>
               </div>
             </div>
@@ -287,6 +288,33 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Section Confirmation Modal -->
+    <div v-if="showDeleteSectionConfirm" class="modal" @click.self="cancelDeleteSection">
+      <div class="modal-content delete-confirm-modal">
+        <div class="modal-header delete-header">
+          <h2>Delete Section</h2>
+          <button @click.stop="cancelDeleteSection" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="warning-icon">⚠️</span>
+            <p>Are you sure you want to delete this entire section?</p>
+          </div>
+          <div class="delete-item-info">
+            <p><strong>Section:</strong> {{ sectionToDelete?.name }}</p>
+            <p><strong>Items:</strong> {{ sectionToDelete?.itemCount }} item(s) will be deleted</p>
+          </div>
+          <p class="delete-notice">This will delete ALL items in this section. This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button @click="cancelDeleteSection" class="btn btn-secondary">Cancel</button>
+          <button @click="deleteSection" class="btn btn-danger" :disabled="isDeletingSection">
+            {{ isDeletingSection ? 'Deleting...' : 'Delete Section' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -346,6 +374,11 @@ export default {
     const deleteModalPosition = ref({ x: null, y: null })
     const isDeleteDragging = ref(false)
     const deleteDragOffset = ref({ x: 0, y: 0 })
+
+    // Section delete state
+    const showDeleteSectionConfirm = ref(false)
+    const sectionToDelete = ref(null)
+    const isDeletingSection = ref(false)
 
     // Task bar dragging state
     const draggingTask = ref(null)
@@ -690,6 +723,43 @@ export default {
     const showContextMenu = (e, task) => {
       // Right-click shows delete confirmation
       confirmDelete(task)
+    }
+
+    // Section delete functions
+    const confirmDeleteSection = (section) => {
+      // Count all items in the section
+      let itemCount = 0
+      section.rows.forEach(row => {
+        itemCount += row.tasks.length
+      })
+      sectionToDelete.value = { ...section, itemCount }
+      showDeleteSectionConfirm.value = true
+    }
+
+    const cancelDeleteSection = () => {
+      showDeleteSectionConfirm.value = false
+      sectionToDelete.value = null
+    }
+
+    const deleteSection = async () => {
+      if (!sectionToDelete.value) return
+
+      isDeletingSection.value = true
+      try {
+        // Delete all tasks in this section (by building name)
+        const { error } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('building', sectionToDelete.value.name)
+        if (error) throw error
+        await loadTasks()
+        cancelDeleteSection()
+      } catch (error) {
+        console.error('Error deleting section:', error)
+        alert('Failed to delete section: ' + error.message)
+      } finally {
+        isDeletingSection.value = false
+      }
     }
 
     // Delete modal dragging
@@ -1321,7 +1391,13 @@ export default {
       deleteTask,
       showContextMenu,
       startDeleteDrag,
-      getDeleteModalStyle
+      getDeleteModalStyle,
+      showDeleteSectionConfirm,
+      sectionToDelete,
+      isDeletingSection,
+      confirmDeleteSection,
+      cancelDeleteSection,
+      deleteSection
     }
   }
 }
