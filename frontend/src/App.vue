@@ -351,7 +351,10 @@ export default {
     const draggingTask = ref(null)
     const dragMode = ref(null) // 'move', 'resize-start', 'resize-end'
     const dragStartX = ref(0)
+    const dragStartY = ref(0)
     const originalTaskDates = ref({ start: null, end: null })
+    const originalRowIndex = ref(null)
+    const ROW_HEIGHT = 25 // Height of each row in pixels
 
     const milestoneForm = ref({
       name: '',
@@ -800,10 +803,12 @@ export default {
       draggingTask.value = task
       dragMode.value = mode
       dragStartX.value = e.clientX
+      dragStartY.value = e.clientY
       originalTaskDates.value = {
         start: dayjs(task.start_date),
         end: dayjs(task.end_date)
       }
+      originalRowIndex.value = task.row_index
       document.addEventListener('mousemove', onTaskDrag)
       document.addEventListener('mouseup', stopTaskDrag)
     }
@@ -812,24 +817,32 @@ export default {
       if (!draggingTask.value) return
 
       const deltaX = e.clientX - dragStartX.value
-      const daysDelta = Math.round(deltaX / 25) // 25px per day
-
-      if (daysDelta === 0) return
+      const deltaY = e.clientY - dragStartY.value
+      const daysDelta = Math.round(deltaX / dayWidth.value)
+      const rowsDelta = Math.round(deltaY / ROW_HEIGHT)
 
       const task = draggingTask.value
 
       if (dragMode.value === 'move') {
-        // Move the entire bar
-        task.start_date = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
-        task.end_date = originalTaskDates.value.end.add(daysDelta, 'day').format('YYYY-MM-DD')
+        // Move the entire bar horizontally
+        if (daysDelta !== 0) {
+          task.start_date = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+          task.end_date = originalTaskDates.value.end.add(daysDelta, 'day').format('YYYY-MM-DD')
+        }
+        // Move vertically (row)
+        if (rowsDelta !== 0) {
+          const baseRow = originalRowIndex.value || 1
+          const newRow = Math.max(1, Math.min(20, baseRow + rowsDelta))
+          task.row_index = newRow
+        }
       } else if (dragMode.value === 'resize-start') {
-        // Resize from start
+        // Resize from start (horizontal only)
         const newStart = originalTaskDates.value.start.add(daysDelta, 'day')
         if (newStart.isBefore(originalTaskDates.value.end) || newStart.isSame(originalTaskDates.value.end)) {
           task.start_date = newStart.format('YYYY-MM-DD')
         }
       } else if (dragMode.value === 'resize-end') {
-        // Resize from end
+        // Resize from end (horizontal only)
         const newEnd = originalTaskDates.value.end.add(daysDelta, 'day')
         if (newEnd.isAfter(originalTaskDates.value.start) || newEnd.isSame(originalTaskDates.value.start)) {
           task.end_date = newEnd.format('YYYY-MM-DD')
@@ -845,20 +858,24 @@ export default {
             .from('tasks')
             .update({
               start_date: draggingTask.value.start_date,
-              end_date: draggingTask.value.end_date
+              end_date: draggingTask.value.end_date,
+              row_index: draggingTask.value.row_index
             })
             .eq('id', draggingTask.value.id)
           if (error) throw error
           await loadDateRange()
+          await loadTasks()
         } catch (error) {
           console.error('Error updating task:', error)
           // Revert on error
           draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
           draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+          draggingTask.value.row_index = originalRowIndex.value
         }
       }
       draggingTask.value = null
       dragMode.value = null
+      originalRowIndex.value = null
       document.removeEventListener('mousemove', onTaskDrag)
       document.removeEventListener('mouseup', stopTaskDrag)
     }
@@ -870,10 +887,12 @@ export default {
       draggingTask.value = task
       dragMode.value = 'move'
       dragStartX.value = e.clientX
+      dragStartY.value = e.clientY
       originalTaskDates.value = {
         start: dayjs(task.start_date),
         end: dayjs(task.end_date)
       }
+      originalRowIndex.value = task.row_index
       document.addEventListener('mousemove', onMilestoneDrag)
       document.addEventListener('mouseup', stopMilestoneDrag)
     }
@@ -882,14 +901,25 @@ export default {
       if (!draggingTask.value) return
 
       const deltaX = e.clientX - dragStartX.value
-      const daysDelta = Math.round(deltaX / 25)
-
-      if (daysDelta === 0) return
+      const deltaY = e.clientY - dragStartY.value
+      const daysDelta = Math.round(deltaX / dayWidth.value)
+      const rowsDelta = Math.round(deltaY / ROW_HEIGHT)
 
       const task = draggingTask.value
-      const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
-      task.start_date = newDate
-      task.end_date = newDate
+
+      // Update horizontal position
+      if (daysDelta !== 0) {
+        const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+        task.start_date = newDate
+        task.end_date = newDate
+      }
+
+      // Update vertical position (row)
+      if (rowsDelta !== 0) {
+        const baseRow = originalRowIndex.value || 1
+        const newRow = Math.max(1, Math.min(20, baseRow + rowsDelta))
+        task.row_index = newRow
+      }
     }
 
     const stopMilestoneDrag = async () => {
@@ -899,19 +929,23 @@ export default {
             .from('tasks')
             .update({
               start_date: draggingTask.value.start_date,
-              end_date: draggingTask.value.end_date
+              end_date: draggingTask.value.end_date,
+              row_index: draggingTask.value.row_index
             })
             .eq('id', draggingTask.value.id)
           if (error) throw error
           await loadDateRange()
+          await loadTasks()
         } catch (error) {
           console.error('Error updating milestone:', error)
           draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
           draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+          draggingTask.value.row_index = originalRowIndex.value
         }
       }
       draggingTask.value = null
       dragMode.value = null
+      originalRowIndex.value = null
       document.removeEventListener('mousemove', onMilestoneDrag)
       document.removeEventListener('mouseup', stopMilestoneDrag)
     }
@@ -923,10 +957,12 @@ export default {
       draggingTask.value = task
       dragMode.value = 'move'
       dragStartX.value = e.clientX
+      dragStartY.value = e.clientY
       originalTaskDates.value = {
         start: dayjs(task.start_date),
         end: dayjs(task.end_date)
       }
+      originalRowIndex.value = task.row_index
       document.addEventListener('mousemove', onTextDrag)
       document.addEventListener('mouseup', stopTextDrag)
     }
@@ -935,14 +971,25 @@ export default {
       if (!draggingTask.value) return
 
       const deltaX = e.clientX - dragStartX.value
+      const deltaY = e.clientY - dragStartY.value
       const daysDelta = Math.round(deltaX / dayWidth.value)
-
-      if (daysDelta === 0) return
+      const rowsDelta = Math.round(deltaY / ROW_HEIGHT)
 
       const task = draggingTask.value
-      const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
-      task.start_date = newDate
-      task.end_date = newDate
+
+      // Update horizontal position
+      if (daysDelta !== 0) {
+        const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+        task.start_date = newDate
+        task.end_date = newDate
+      }
+
+      // Update vertical position (row)
+      if (rowsDelta !== 0) {
+        const baseRow = originalRowIndex.value || 1
+        const newRow = Math.max(1, Math.min(20, baseRow + rowsDelta))
+        task.row_index = newRow
+      }
     }
 
     const stopTextDrag = async () => {
@@ -952,19 +999,23 @@ export default {
             .from('tasks')
             .update({
               start_date: draggingTask.value.start_date,
-              end_date: draggingTask.value.end_date
+              end_date: draggingTask.value.end_date,
+              row_index: draggingTask.value.row_index
             })
             .eq('id', draggingTask.value.id)
           if (error) throw error
           await loadDateRange()
+          await loadTasks()
         } catch (error) {
           console.error('Error updating text item:', error)
           draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
           draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+          draggingTask.value.row_index = originalRowIndex.value
         }
       }
       draggingTask.value = null
       dragMode.value = null
+      originalRowIndex.value = null
       document.removeEventListener('mousemove', onTextDrag)
       document.removeEventListener('mouseup', stopTextDrag)
     }
@@ -1144,15 +1195,33 @@ export default {
             }
           })
 
-          let autoRowCounter = maxExplicitRow
-          const rows = sortedEntries.map(([rowIdx, rowTasks]) => {
-            // Use explicit row_index if it's a number, otherwise assign next available
-            const isAuto = String(rowIdx).startsWith('auto_')
-            const displayRowNumber = isAuto ? ++autoRowCounter : parseInt(rowIdx)
-            return {
-              rowNumber: displayRowNumber,
-              rowIndex: rowIdx,
-              tasks: rowTasks
+          // Create all 20 rows, placing tasks in their assigned rows
+          const rows = []
+          for (let i = 1; i <= 20; i++) {
+            const tasksForRow = rowGroups[i] || []
+            rows.push({
+              rowNumber: i,
+              rowIndex: i,
+              tasks: tasksForRow
+            })
+          }
+
+          // Add any auto-assigned tasks to rows after 20 or to empty slots
+          let autoRowNum = 21
+          sortedEntries.forEach(([rowIdx, rowTasks]) => {
+            if (String(rowIdx).startsWith('auto_')) {
+              // Find first empty row or add after 20
+              let targetRow = rows.find(r => r.tasks.length === 0)
+              if (targetRow) {
+                targetRow.tasks = rowTasks
+              } else {
+                rows.push({
+                  rowNumber: autoRowNum,
+                  rowIndex: `auto_${autoRowNum}`,
+                  tasks: rowTasks
+                })
+                autoRowNum++
+              }
             }
           })
 
