@@ -594,7 +594,6 @@ body {
 
 .text-item {
   position: absolute;
-  left: 10px;
   top: 50%;
   transform: translateY(-50%);
   padding: 2px 8px;
@@ -602,6 +601,13 @@ body {
   border-radius: 3px;
   z-index: 5;
   white-space: nowrap;
+  cursor: move;
+}
+
+.text-item.dragging {
+  opacity: 0.8;
+  z-index: 100;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Delete button on items */

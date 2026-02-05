@@ -82,7 +82,9 @@
 
                   <div v-else-if="task.type === 'text'"
                        class="text-item"
+                       :class="{ 'dragging': draggingTask && draggingTask.id === task.id }"
                        :style="getTextStyle(task)"
+                       @mousedown="startTextDrag($event, task)"
                        @contextmenu.prevent="showContextMenu($event, task)">
                     {{ task.name }}
                     <button class="delete-btn text-delete" @click.stop="confirmDelete(task)" title="Delete">×</button>
@@ -218,6 +220,8 @@
           <div v-else-if="modalType === 'text'" class="form-group">
             <label>Text Content:</label>
             <input v-model="textForm.content" type="text" placeholder="Enter text">
+            <label>Start Date (position on timeline):</label>
+            <input v-model="textForm.startDate" type="date">
             <label>Section:</label>
             <select v-model="textForm.section">
               <option value="" disabled>Select a section</option>
@@ -385,6 +389,7 @@ export default {
 
     const textForm = ref({
       content: '',
+      startDate: '',
       section: '',
       newSectionName: '',
       row_index: null,
@@ -505,7 +510,11 @@ export default {
       let styles = {}
       try {
         const textStyles = task.notes ? JSON.parse(task.notes) : {}
+        // Calculate position based on start_date
+        const taskDate = dayjs(task.start_date)
+        const dayIndex = taskDate.diff(startDate.value, 'day')
         styles = {
+          left: `${dayIndex * dayWidth.value + 5}px`,
           color: task.color || '#000',
           fontSize: textStyles.fontSize === 'small' ? '10px' : textStyles.fontSize === 'large' ? '14px' : '12px',
           fontWeight: textStyles.bold ? 'bold' : 'normal',
@@ -513,7 +522,12 @@ export default {
           textDecoration: textStyles.underline ? 'underline' : 'none'
         }
       } catch (e) {
-        styles = { color: task.color || '#000' }
+        const taskDate = dayjs(task.start_date)
+        const dayIndex = taskDate.diff(startDate.value, 'day')
+        styles = {
+          left: `${dayIndex * dayWidth.value + 5}px`,
+          color: task.color || '#000'
+        }
       }
       return styles
     }
@@ -579,6 +593,7 @@ export default {
       modalTitle.value = 'Add Text Line'
       textForm.value = {
         content: '',
+        startDate: dayjs().format('YYYY-MM-DD'),
         section: sections.value.length > 0 ? sections.value[0].id : '__new__',
         newSectionName: '',
         row_index: null,
@@ -901,6 +916,59 @@ export default {
       document.removeEventListener('mouseup', stopMilestoneDrag)
     }
 
+    // Text item drag functions
+    const startTextDrag = (e, task) => {
+      e.preventDefault()
+      e.stopPropagation()
+      draggingTask.value = task
+      dragMode.value = 'move'
+      dragStartX.value = e.clientX
+      originalTaskDates.value = {
+        start: dayjs(task.start_date),
+        end: dayjs(task.end_date)
+      }
+      document.addEventListener('mousemove', onTextDrag)
+      document.addEventListener('mouseup', stopTextDrag)
+    }
+
+    const onTextDrag = (e) => {
+      if (!draggingTask.value) return
+
+      const deltaX = e.clientX - dragStartX.value
+      const daysDelta = Math.round(deltaX / dayWidth.value)
+
+      if (daysDelta === 0) return
+
+      const task = draggingTask.value
+      const newDate = originalTaskDates.value.start.add(daysDelta, 'day').format('YYYY-MM-DD')
+      task.start_date = newDate
+      task.end_date = newDate
+    }
+
+    const stopTextDrag = async () => {
+      if (draggingTask.value) {
+        try {
+          const { error } = await supabase
+            .from('tasks')
+            .update({
+              start_date: draggingTask.value.start_date,
+              end_date: draggingTask.value.end_date
+            })
+            .eq('id', draggingTask.value.id)
+          if (error) throw error
+          await loadDateRange()
+        } catch (error) {
+          console.error('Error updating text item:', error)
+          draggingTask.value.start_date = originalTaskDates.value.start.format('YYYY-MM-DD')
+          draggingTask.value.end_date = originalTaskDates.value.end.format('YYYY-MM-DD')
+        }
+      }
+      draggingTask.value = null
+      dragMode.value = null
+      document.removeEventListener('mousemove', onTextDrag)
+      document.removeEventListener('mouseup', stopTextDrag)
+    }
+
     const saveModalData = async () => {
       formErrors.value = []
       isSaving.value = true
@@ -989,11 +1057,12 @@ export default {
             ? textForm.value.newSectionName.trim()
             : sections.value.find(s => s.id === textForm.value.section)?.name || 'Other'
 
+          const textDate = textForm.value.startDate || dayjs().format('YYYY-MM-DD')
           const newTask = {
             name: textForm.value.content.trim(),
             building: buildingName,
-            start_date: dayjs().format('YYYY-MM-DD'),
-            end_date: dayjs().format('YYYY-MM-DD'),
+            start_date: textDate,
+            end_date: textDate,
             type: 'text',
             color: textForm.value.color,
             progress: 0,
@@ -1057,11 +1126,35 @@ export default {
           })
 
           // Convert to array of rows with multiple tasks
-          const rows = Object.entries(rowGroups).map(([rowIdx, rowTasks], rowIndex) => ({
-            rowNumber: rowIndex + 1,
-            rowIndex: rowIdx,
-            tasks: rowTasks
-          }))
+          // Sort rows: numeric row_index first (in order), then auto rows
+          const sortedEntries = Object.entries(rowGroups).sort(([a], [b]) => {
+            const aIsAuto = String(a).startsWith('auto_')
+            const bIsAuto = String(b).startsWith('auto_')
+            if (aIsAuto && bIsAuto) return 0
+            if (aIsAuto) return 1
+            if (bIsAuto) return -1
+            return parseInt(a) - parseInt(b)
+          })
+
+          // Track the next available row number for auto rows
+          let maxExplicitRow = 0
+          sortedEntries.forEach(([rowIdx]) => {
+            if (!String(rowIdx).startsWith('auto_')) {
+              maxExplicitRow = Math.max(maxExplicitRow, parseInt(rowIdx))
+            }
+          })
+
+          let autoRowCounter = maxExplicitRow
+          const rows = sortedEntries.map(([rowIdx, rowTasks]) => {
+            // Use explicit row_index if it's a number, otherwise assign next available
+            const isAuto = String(rowIdx).startsWith('auto_')
+            const displayRowNumber = isAuto ? ++autoRowCounter : parseInt(rowIdx)
+            return {
+              rowNumber: displayRowNumber,
+              rowIndex: rowIdx,
+              tasks: rowTasks
+            }
+          })
 
           return {
             id: index + 1,
@@ -1149,6 +1242,7 @@ export default {
       validateTimelineForm,
       startTaskDrag,
       startMilestoneDrag,
+      startTextDrag,
       filterByProject,
       showDeleteConfirm,
       taskToDelete,
