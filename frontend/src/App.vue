@@ -142,47 +142,47 @@
           </div>
 
           <div v-if="modalType === 'milestone'" class="form-group">
-            <label>Milestone Name:</label>
-            <input v-model="milestoneForm.name" type="text" placeholder="Enter milestone name">
-            <label>Date:</label>
-            <input v-model="milestoneForm.date" type="date">
-            <label>Section:</label>
-            <select v-model="milestoneForm.section">
+            <label>Milestone Name: <span class="field-hint">Required - text, max 255 chars</span></label>
+            <input v-model="milestoneForm.name" type="text" placeholder="e.g. Project Kickoff" maxlength="255" title="Required. Enter a name for this milestone (max 255 characters)">
+            <label>Date: <span class="field-hint">Required - pick a date</span></label>
+            <input v-model="milestoneForm.date" type="date" title="Required. Select the milestone date">
+            <label>Section: <span class="field-hint">Required - select or create</span></label>
+            <select v-model="milestoneForm.section" title="Required. Choose an existing section or create a new one">
               <option value="" disabled>Select a section</option>
               <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
               <option value="__new__">+ Create New Section</option>
             </select>
             <div v-if="milestoneForm.section === '__new__'">
-              <label>New Section Name:</label>
-              <input v-model="milestoneForm.newSectionName" type="text" placeholder="Enter section name">
+              <label>New Section Name: <span class="field-hint">Required - text, max 255 chars</span></label>
+              <input v-model="milestoneForm.newSectionName" type="text" placeholder="e.g. Building 200" maxlength="255" title="Required when creating a new section. Enter the section/building name">
             </div>
-            <label>Row (optional - leave empty for new row):</label>
-            <input v-model.number="milestoneForm.row_index" type="number" min="1" placeholder="Row number">
+            <label>Row: <span class="field-hint">Optional - number 1-20, leave empty for auto</span></label>
+            <input v-model="milestoneForm.row_index" type="number" min="1" max="20" placeholder="Auto-assigned if empty" title="Optional. Enter a row number (1-20) or leave empty for auto-placement">
             <label>Color:</label>
-            <input v-model="milestoneForm.color" type="color">
+            <input v-model="milestoneForm.color" type="color" title="Pick a color for the milestone diamond">
           </div>
 
           <div v-else-if="modalType === 'timeline'" class="form-group">
-            <label>Task Name:</label>
-            <input v-model="timelineForm.name" type="text" placeholder="Enter task name">
-            <label>Start Date:</label>
-            <input v-model="timelineForm.startDate" type="date">
-            <label>End Date:</label>
-            <input v-model="timelineForm.endDate" type="date">
-            <label>Section:</label>
-            <select v-model="timelineForm.section">
+            <label>Task Name: <span class="field-hint">Required - text, max 255 chars</span></label>
+            <input v-model="timelineForm.name" type="text" placeholder="e.g. Foundation Work" maxlength="255" title="Required. Enter a name for this timeline bar (max 255 characters)">
+            <label>Start Date: <span class="field-hint">Required</span></label>
+            <input v-model="timelineForm.startDate" type="date" title="Required. Select the start date">
+            <label>End Date: <span class="field-hint">Required - must be on or after start date</span></label>
+            <input v-model="timelineForm.endDate" type="date" title="Required. Must be on or after the start date">
+            <label>Section: <span class="field-hint">Required - select or create</span></label>
+            <select v-model="timelineForm.section" title="Required. Choose an existing section or create a new one">
               <option value="" disabled>Select a section</option>
               <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
               <option value="__new__">+ Create New Section</option>
             </select>
             <div v-if="timelineForm.section === '__new__'">
-              <label>New Section Name:</label>
-              <input v-model="timelineForm.newSectionName" type="text" placeholder="Enter section name">
+              <label>New Section Name: <span class="field-hint">Required - text, max 255 chars</span></label>
+              <input v-model="timelineForm.newSectionName" type="text" placeholder="e.g. Building 200" maxlength="255" title="Required when creating a new section. Enter the section/building name">
             </div>
-            <label>Row (optional - leave empty for new row):</label>
-            <input v-model.number="timelineForm.row_index" type="number" min="1" placeholder="Row number">
+            <label>Row: <span class="field-hint">Optional - number 1-20, leave empty for auto</span></label>
+            <input v-model="timelineForm.row_index" type="number" min="1" max="20" placeholder="Auto-assigned if empty" title="Optional. Enter a row number (1-20) or leave empty for auto-placement">
             <label>Color:</label>
-            <input v-model="timelineForm.color" type="color">
+            <input v-model="timelineForm.color" type="color" title="Pick a color for the timeline bar">
           </div>
 
           <div v-else-if="modalType === 'startDate'" class="form-group">
@@ -220,22 +220,22 @@
           </div>
 
           <div v-else-if="modalType === 'text'" class="form-group">
-            <label>Text Content:</label>
-            <input v-model="textForm.content" type="text" placeholder="Enter text">
-            <label>Start Date (position on timeline):</label>
-            <input v-model="textForm.startDate" type="date">
-            <label>Section:</label>
-            <select v-model="textForm.section">
+            <label>Text Content: <span class="field-hint">Required - text, max 255 chars</span></label>
+            <input v-model="textForm.content" type="text" placeholder="e.g. Phase 1 Complete" maxlength="255" title="Required. Enter the text to display on the chart">
+            <label>Start Date (position on timeline): <span class="field-hint">Required</span></label>
+            <input v-model="textForm.startDate" type="date" title="Required. Sets horizontal position on the timeline">
+            <label>Section: <span class="field-hint">Required - select or create</span></label>
+            <select v-model="textForm.section" title="Required. Choose an existing section or create a new one">
               <option value="" disabled>Select a section</option>
               <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
               <option value="__new__">+ Create New Section</option>
             </select>
             <div v-if="textForm.section === '__new__'">
-              <label>New Section Name:</label>
-              <input v-model="textForm.newSectionName" type="text" placeholder="Enter section name">
+              <label>New Section Name: <span class="field-hint">Required - text, max 255 chars</span></label>
+              <input v-model="textForm.newSectionName" type="text" placeholder="e.g. Building 200" maxlength="255" title="Required when creating a new section">
             </div>
-            <label>Row (optional):</label>
-            <input v-model.number="textForm.row_index" type="number" min="1" placeholder="Row number">
+            <label>Row: <span class="field-hint">Optional - number 1-20</span></label>
+            <input v-model="textForm.row_index" type="number" min="1" max="20" placeholder="Auto-assigned if empty" title="Optional. Enter a row number (1-20) or leave empty">
             <label>Font Size:</label>
             <select v-model="textForm.fontSize">
               <option value="small">Small</option>
@@ -362,15 +362,15 @@ const sanitizeString = (str, maxLength = 255) => {
 }
 const sanitizeTaskData = (task) => {
   const sanitized = {
-    name: sanitizeString(task.name, 255),
+    name: sanitizeString(task.name, 255) || 'Untitled',
     building: sanitizeString(task.building, 255) || 'Building 100',
     start_date: isValidDate(task.start_date) ? task.start_date : dayjs().format('YYYY-MM-DD'),
     end_date: isValidDate(task.end_date) ? task.end_date : dayjs().format('YYYY-MM-DD'),
     type: ['task', 'milestone', 'section', 'text'].includes(task.type) ? task.type : 'task',
     color: isValidHexColor(task.color) ? task.color : '#3498db',
     progress: Math.min(100, Math.max(0, parseInt(task.progress) || 0)),
-    row_index: task.row_index ? parseInt(task.row_index) : null,
-    dependencies: sanitizeString(task.dependencies, 255),
+    row_index: (task.row_index && !isNaN(parseInt(task.row_index))) ? parseInt(task.row_index) : null,
+    dependencies: task.dependencies ? sanitizeString(task.dependencies, 255) : null,
     notes: task.notes ? sanitizeString(task.notes, 5000) : null,
     sub_header: task.sub_header ? sanitizeString(task.sub_header, 255) : null,
     company: task.company ? sanitizeString(task.company, 255) : null,
