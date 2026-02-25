@@ -124,6 +124,7 @@
         <button @click="createMilestone" class="control-btn">Create Milestone</button>
         <button @click="createTimeline" class="control-btn">Create Timeline</button>
         <button @click="addTextLine" class="control-btn">Add Text</button>
+        <button @click="openPrintModal" class="control-btn" style="background: #2196F3;">Print</button>
       </div>
     </div>
 
@@ -315,6 +316,35 @@
         </div>
       </div>
     </div>
+
+    <!-- Print Settings Modal -->
+    <div v-if="showPrintModal" class="modal" @click.self="closePrintModal">
+      <div class="modal-content" :style="getPrintModalStyle()">
+        <div class="modal-header" @mousedown="startPrintDrag">
+          <h2>Print Settings</h2>
+          <button @click.stop="closePrintModal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Paper Size:</label>
+            <select v-model="printForm.paperSize">
+              <option value="letter">8.5" x 11" (Letter)</option>
+              <option value="tabloid">11" x 17" (Tabloid)</option>
+              <option value="archD">24" x 36" (Arch D)</option>
+            </select>
+            <label>Orientation:</label>
+            <div class="checkbox-group horizontal">
+              <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
+              <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="closePrintModal" class="btn btn-secondary">Cancel</button>
+          <button @click="executePrint" class="btn btn-primary" style="background: #2196F3;">Print</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -379,6 +409,16 @@ export default {
     const showDeleteSectionConfirm = ref(false)
     const sectionToDelete = ref(null)
     const isDeletingSection = ref(false)
+
+    // Print modal state
+    const showPrintModal = ref(false)
+    const printForm = ref({
+      paperSize: 'letter',
+      orientation: 'landscape'
+    })
+    const printModalPosition = ref({ x: null, y: null })
+    const isPrintDragging = ref(false)
+    const printDragOffset = ref({ x: 0, y: 0 })
 
     // Task bar dragging state
     const draggingTask = ref(null)
@@ -1090,6 +1130,97 @@ export default {
       document.removeEventListener('mouseup', stopTextDrag)
     }
 
+    // Print modal functions
+    const openPrintModal = () => {
+      showPrintModal.value = true
+      printModalPosition.value = { x: null, y: null }
+    }
+
+    const closePrintModal = () => {
+      showPrintModal.value = false
+      printModalPosition.value = { x: null, y: null }
+    }
+
+    const startPrintDrag = (e) => {
+      if (e.target.closest('.close-btn')) return
+      isPrintDragging.value = true
+      const modal = e.target.closest('.modal-content')
+      const rect = modal.getBoundingClientRect()
+      printDragOffset.value = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      }
+      document.addEventListener('mousemove', onPrintDrag)
+      document.addEventListener('mouseup', stopPrintDrag)
+    }
+
+    const onPrintDrag = (e) => {
+      if (!isPrintDragging.value) return
+      printModalPosition.value = {
+        x: e.clientX - printDragOffset.value.x,
+        y: e.clientY - printDragOffset.value.y
+      }
+    }
+
+    const stopPrintDrag = () => {
+      isPrintDragging.value = false
+      document.removeEventListener('mousemove', onPrintDrag)
+      document.removeEventListener('mouseup', stopPrintDrag)
+    }
+
+    const getPrintModalStyle = () => {
+      if (printModalPosition.value.x === null) return {}
+      return {
+        position: 'fixed',
+        left: printModalPosition.value.x + 'px',
+        top: printModalPosition.value.y + 'px',
+        transform: 'none'
+      }
+    }
+
+    const executePrint = () => {
+      const sizeMap = {
+        letter: { width: '8.5in', height: '11in' },
+        tabloid: { width: '11in', height: '17in' },
+        archD: { width: '24in', height: '36in' }
+      }
+
+      const size = sizeMap[printForm.value.paperSize]
+      const isLandscape = printForm.value.orientation === 'landscape'
+
+      // Build @page CSS with the chosen size and orientation
+      const pageWidth = isLandscape ? size.height : size.width
+      const pageHeight = isLandscape ? size.width : size.height
+
+      const printStyle = document.createElement('style')
+      printStyle.id = 'dynamic-print-style'
+      printStyle.textContent = `
+        @page {
+          size: ${pageWidth} ${pageHeight};
+          margin: 0.25in;
+        }
+      `
+      document.head.appendChild(printStyle)
+
+      closePrintModal()
+
+      // Small delay so modal closes before print dialog opens
+      setTimeout(() => {
+        window.print()
+        // Clean up after print dialog closes
+        const cleanup = () => {
+          const el = document.getElementById('dynamic-print-style')
+          if (el) el.remove()
+        }
+        // Use onafterprint if available, otherwise timeout fallback
+        if (window.onafterprint !== undefined) {
+          window.addEventListener('afterprint', cleanup, { once: true })
+        } else {
+          setTimeout(cleanup, 1000)
+        }
+      }, 200)
+    }
+
     const saveModalData = async () => {
       formErrors.value = []
       isSaving.value = true
@@ -1397,7 +1528,14 @@ export default {
       isDeletingSection,
       confirmDeleteSection,
       cancelDeleteSection,
-      deleteSection
+      deleteSection,
+      showPrintModal,
+      printForm,
+      openPrintModal,
+      closePrintModal,
+      startPrintDrag,
+      getPrintModalStyle,
+      executePrint
     }
   }
 }

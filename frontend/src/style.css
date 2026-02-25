@@ -811,20 +811,73 @@ body {
 }
 
 @media print {
-  .user-bar {
-    display: none;
+  .user-bar,
+  .controls-panel,
+  .project-filter,
+  .modal,
+  .delete-btn,
+  .section-delete-btn,
+  .resize-handle {
+    display: none !important;
   }
 
-  .controls-panel {
-    display: none;
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #app {
+    overflow: visible !important;
+  }
+
+  .gantt-container {
+    overflow: visible !important;
+    margin: 0;
+    padding: 0;
   }
 
   .gantt-chart-wrapper {
     border: 1px solid #000;
+    overflow: visible !important;
+    width: 100% !important;
+    min-width: unset !important;
   }
 
-  body {
-    margin: 0;
-    padding: 0;
+  .timeline-header,
+  .timeline-days-row {
+    overflow: visible !important;
+  }
+
+  .timeline-months,
+  .timeline-days,
+  .timeline-area {
+    overflow: visible !important;
+  }
+
+  .gantt-body {
+    overflow: visible !important;
+  }
+
+  .task-bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .milestone svg polygon {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .day-cell.weekend {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .month-header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
