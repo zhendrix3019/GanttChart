@@ -58,6 +58,7 @@
                        :title="task.name"
                        @mousedown="startMilestoneDrag($event, task)"
                        @contextmenu.prevent="showContextMenu($event, task)">
+                    <button class="edit-btn" @click.stop="editTask(task)" title="Edit">&#9998;</button>
                     <svg width="20" height="20" viewBox="0 0 20 20">
                       <polygon points="10,2 18,10 10,18 2,10" :fill="task.color || '#666'"/>
                     </svg>
@@ -71,6 +72,7 @@
                        :style="getTaskBarStyle(task)"
                        :title="task.name"
                        @contextmenu.prevent="showContextMenu($event, task)">
+                    <button class="edit-btn" @click.stop="editTask(task)" title="Edit">&#9998;</button>
                     <div class="resize-handle resize-start" @mousedown="startTaskDrag($event, task, 'resize-start')"></div>
                     <div class="task-bar-content" @mousedown="startTaskDrag($event, task, 'move')">
                       <span class="task-date-start">{{ getTaskStartDay(task) }}</span>
@@ -87,6 +89,7 @@
                        :style="getTextStyle(task)"
                        @mousedown="startTextDrag($event, task)"
                        @contextmenu.prevent="showContextMenu($event, task)">
+                    <button class="edit-btn" @click.stop="editTask(task)" title="Edit">&#9998;</button>
                     {{ task.name }}
                     <button class="delete-btn text-delete" @click.stop="confirmDelete(task)" title="Delete">×</button>
                   </div>
@@ -410,6 +413,9 @@ export default {
     const sectionToDelete = ref(null)
     const isDeletingSection = ref(false)
 
+    // Edit task state
+    const editingTaskId = ref(null)
+
     // Print modal state
     const showPrintModal = ref(false)
     const printForm = ref({
@@ -687,6 +693,7 @@ export default {
       modalType.value = ''
       formErrors.value = []
       modalPosition.value = { x: null, y: null }
+      editingTaskId.value = null
     }
 
     // Modal dragging functions
@@ -1221,6 +1228,52 @@ export default {
       }, 200)
     }
 
+    const editTask = (task) => {
+      editingTaskId.value = task.id
+      if (task.type === 'milestone') {
+        modalType.value = 'milestone'
+        modalTitle.value = 'Edit Milestone'
+        milestoneForm.value = {
+          name: task.name,
+          date: task.start_date,
+          section: sections.value.find(s => s.name === task.building)?.id || '',
+          newSectionName: '',
+          color: task.color || '#666666',
+          row_index: task.row_index
+        }
+      } else if (task.type === 'task') {
+        modalType.value = 'timeline'
+        modalTitle.value = 'Edit Timeline'
+        timelineForm.value = {
+          name: task.name,
+          startDate: task.start_date,
+          endDate: task.end_date,
+          section: sections.value.find(s => s.name === task.building)?.id || '',
+          newSectionName: '',
+          color: task.color || '#4CAF50',
+          row_index: task.row_index
+        }
+      } else if (task.type === 'text') {
+        modalType.value = 'text'
+        modalTitle.value = 'Edit Text'
+        let textStyles = {}
+        try { textStyles = task.notes ? JSON.parse(task.notes) : {} } catch (e) { /* ignore */ }
+        textForm.value = {
+          content: task.name,
+          startDate: task.start_date,
+          section: sections.value.find(s => s.name === task.building)?.id || '',
+          newSectionName: '',
+          row_index: task.row_index,
+          fontSize: textStyles.fontSize || 'medium',
+          bold: textStyles.bold || false,
+          italic: textStyles.italic || false,
+          underline: textStyles.underline || false,
+          color: task.color || '#000000'
+        }
+      }
+      showModal.value = true
+    }
+
     const saveModalData = async () => {
       formErrors.value = []
       isSaving.value = true
@@ -1250,8 +1303,13 @@ export default {
             row_index: milestoneForm.value.row_index
           }
 
-          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
-          if (error) throw error
+          if (editingTaskId.value) {
+            const { error } = await supabase.from('tasks').update(sanitizeTaskData(newTask)).eq('id', editingTaskId.value)
+            if (error) throw error
+          } else {
+            const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+            if (error) throw error
+          }
           await loadDateRange()
           await loadTasks()
           closeModal()
@@ -1279,8 +1337,13 @@ export default {
             row_index: timelineForm.value.row_index
           }
 
-          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
-          if (error) throw error
+          if (editingTaskId.value) {
+            const { error } = await supabase.from('tasks').update(sanitizeTaskData(newTask)).eq('id', editingTaskId.value)
+            if (error) throw error
+          } else {
+            const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+            if (error) throw error
+          }
           await loadDateRange()
           await loadTasks()
           closeModal()
@@ -1327,8 +1390,13 @@ export default {
             })
           }
 
-          const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
-          if (error) throw error
+          if (editingTaskId.value) {
+            const { error } = await supabase.from('tasks').update(sanitizeTaskData(newTask)).eq('id', editingTaskId.value)
+            if (error) throw error
+          } else {
+            const { error } = await supabase.from('tasks').insert([sanitizeTaskData(newTask)])
+            if (error) throw error
+          }
           await loadTasks()
           closeModal()
         }
@@ -1521,6 +1589,7 @@ export default {
       cancelDelete,
       deleteTask,
       showContextMenu,
+      editTask,
       startDeleteDrag,
       getDeleteModalStyle,
       showDeleteSectionConfirm,
