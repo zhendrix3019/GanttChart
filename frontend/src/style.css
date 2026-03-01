@@ -161,7 +161,7 @@ body {
   transform: translateY(-50%);
   z-index: 5;
   background: white;
-  padding: 4px 15px 4px 35px;
+  padding: 10px 40px 10px 35px;
   margin-left: -25px;
 }
 
@@ -215,8 +215,8 @@ body {
 
 .section-edit-btn {
   position: absolute;
-  right: -8px;
-  top: -8px;
+  left: 22px;
+  top: -6px;
   width: 18px;
   height: 18px;
   background: #2196F3;
@@ -241,8 +241,8 @@ body {
 
 .section-delete-btn {
   position: absolute;
-  right: -30px;
-  top: -8px;
+  right: -8px;
+  top: -6px;
   width: 18px;
   height: 18px;
   background: #dc3545;
