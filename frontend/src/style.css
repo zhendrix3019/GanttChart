@@ -152,9 +152,68 @@ body {
   text-decoration: underline;
 }
 
-.section-delete-btn {
+.section-move-btns {
+  display: none;
+  flex-direction: column;
+  gap: 1px;
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+}
+
+.section-move-btn {
+  width: 18px;
+  height: 14px;
+  background: #6c757d;
+  color: white;
+  border: 1px solid white;
+  border-radius: 2px;
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.section-move-btn:hover {
+  background: #495057;
+}
+
+.section-edit-btn {
   position: absolute;
   right: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: #2196F3;
+  color: white;
+  border: 2px solid white;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.section-edit-btn:hover {
+  background: #1976D2;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.section-delete-btn {
+  position: absolute;
+  right: -55px;
   top: 50%;
   transform: translateY(-50%);
   width: 20px;
@@ -179,7 +238,9 @@ body {
   transform: translateY(-50%) scale(1.1);
 }
 
-.section-header:hover .section-delete-btn {
+.section-header:hover .section-delete-btn,
+.section-header:hover .section-edit-btn,
+.section-header:hover .section-move-btns {
   display: flex;
 }
 
@@ -631,6 +692,14 @@ body {
   cursor: pointer;
 }
 
+.print-section-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 8px;
+  margin-top: 5px;
+}
+
 .text-item {
   position: absolute;
   top: 50%;
@@ -856,6 +925,8 @@ body {
   .edit-btn,
   .delete-btn,
   .section-delete-btn,
+  .section-edit-btn,
+  .section-move-btns,
   .resize-handle {
     display: none !important;
   }

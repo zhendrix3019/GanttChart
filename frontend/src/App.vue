@@ -36,8 +36,13 @@
                   <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }"></div>
                 </div>
                 <div class="section-header">
+                  <div class="section-move-btns">
+                    <button class="section-move-btn" @click.stop="moveSectionUp(section)" title="Move Section Up">&#9650;</button>
+                    <button class="section-move-btn" @click.stop="moveSectionDown(section)" title="Move Section Down">&#9660;</button>
+                  </div>
                   <div class="section-title-text">{{ section.name }}</div>
                   <div v-if="section.sub_header" class="section-sub-header">{{ section.sub_header }}</div>
+                  <button class="section-edit-btn" @click.stop="editSection(section)" title="Edit Section">&#9998;</button>
                   <button class="section-delete-btn" @click.stop="confirmDeleteSection(section)" title="Delete Section">×</button>
                 </div>
               </div>
@@ -320,6 +325,35 @@
       </div>
     </div>
 
+    <!-- Edit Section Modal -->
+    <div v-if="showEditSectionModal" class="modal" @click.self="cancelEditSection">
+      <div class="modal-content" :style="{ width: '450px' }">
+        <div class="modal-header">
+          <h2>Edit Section</h2>
+          <button @click.stop="cancelEditSection" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="sectionEditErrors.length > 0" class="form-errors">
+            <div v-for="(error, index) in sectionEditErrors" :key="index" class="error-message">
+              {{ error }}
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Section Name: <span class="field-hint">Required</span></label>
+            <input v-model="sectionEditForm.name" type="text" placeholder="Section name" maxlength="255">
+            <label>Sub Header: <span class="field-hint">Optional</span></label>
+            <input v-model="sectionEditForm.sub_header" type="text" placeholder="Optional sub header" maxlength="255">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="cancelEditSection" class="btn btn-secondary">Cancel</button>
+          <button @click="saveSectionEdit" class="btn btn-primary" :disabled="isSavingSection">
+            {{ isSavingSection ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Print Settings Modal -->
     <div v-if="showPrintModal" class="modal" @click.self="closePrintModal">
       <div class="modal-content" :style="getPrintModalStyle()">
@@ -339,6 +373,17 @@
             <div class="checkbox-group horizontal">
               <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
               <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
+            </div>
+            <label>Sections to Print:</label>
+            <div class="checkbox-group horizontal">
+              <label><input type="radio" v-model="printForm.printMode" value="all"> All Sections</label>
+              <label><input type="radio" v-model="printForm.printMode" value="selected"> Select Sections</label>
+            </div>
+            <div v-if="printForm.printMode === 'selected'" class="checkbox-group print-section-list">
+              <label v-for="section in sections" :key="section.id">
+                <input type="checkbox" :value="section.name" v-model="printForm.selectedSections">
+                {{ section.name }}
+              </label>
             </div>
           </div>
         </div>
@@ -413,6 +458,15 @@ export default {
     const sectionToDelete = ref(null)
     const isDeletingSection = ref(false)
 
+    // Section edit state
+    const showEditSectionModal = ref(false)
+    const sectionEditForm = ref({ name: '', sub_header: '', originalName: '' })
+    const sectionEditErrors = ref([])
+    const isSavingSection = ref(false)
+
+    // Section ordering (persisted to localStorage)
+    const sectionOrder = ref(JSON.parse(localStorage.getItem('gantt_section_order') || '[]'))
+
     // Edit task state
     const editingTaskId = ref(null)
 
@@ -420,7 +474,9 @@ export default {
     const showPrintModal = ref(false)
     const printForm = ref({
       paperSize: 'letter',
-      orientation: 'landscape'
+      orientation: 'landscape',
+      printMode: 'all',          // 'all' or 'selected'
+      selectedSections: []       // section names to print
     })
     const printModalPosition = ref({ x: null, y: null })
     const isPrintDragging = ref(false)
@@ -486,6 +542,7 @@ export default {
 
     const projectStartDate = ref('')
     const moveExisting = ref(false)
+    const userSetStartDate = ref(false) // Track if user manually set start date
 
     // Project filtering
     const selectedProject = ref('all')
@@ -809,6 +866,130 @@ export default {
       }
     }
 
+    // Section edit functions
+    const editSection = (section) => {
+      sectionEditForm.value = {
+        name: section.name,
+        sub_header: section.sub_header || '',
+        originalName: section.name
+      }
+      sectionEditErrors.value = []
+      showEditSectionModal.value = true
+    }
+
+    const cancelEditSection = () => {
+      showEditSectionModal.value = false
+      sectionEditForm.value = { name: '', sub_header: '', originalName: '' }
+      sectionEditErrors.value = []
+    }
+
+    const saveSectionEdit = async () => {
+      sectionEditErrors.value = []
+      const newName = sectionEditForm.value.name.trim()
+      const oldName = sectionEditForm.value.originalName
+      const newSubHeader = sectionEditForm.value.sub_header.trim() || null
+
+      if (!newName) {
+        sectionEditErrors.value = ['Section name is required']
+        return
+      }
+
+      // Check if new name conflicts with existing section
+      if (newName !== oldName && allSections.value.some(s => s.name === newName)) {
+        sectionEditErrors.value = ['A section with this name already exists']
+        return
+      }
+
+      isSavingSection.value = true
+      try {
+        // Update all tasks in this section with new building name and sub_header
+        const { data: sectionTasks, error: fetchError } = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('building', oldName)
+        if (fetchError) throw fetchError
+
+        for (const task of sectionTasks) {
+          const updateData = { building: newName, sub_header: newSubHeader }
+          const { error: updateError } = await supabase
+            .from('tasks')
+            .update(updateData)
+            .eq('id', task.id)
+          if (updateError) throw updateError
+        }
+
+        // Update section order if name changed
+        if (newName !== oldName) {
+          const orderIdx = sectionOrder.value.indexOf(oldName)
+          if (orderIdx !== -1) {
+            sectionOrder.value[orderIdx] = newName
+          }
+          saveSectionOrder()
+        }
+
+        await loadTasks()
+        cancelEditSection()
+      } catch (error) {
+        console.error('Error updating section:', error)
+        sectionEditErrors.value = ['Failed to update section: ' + error.message]
+      } finally {
+        isSavingSection.value = false
+      }
+    }
+
+    // Section move functions
+    const saveSectionOrder = () => {
+      localStorage.setItem('gantt_section_order', JSON.stringify(sectionOrder.value))
+    }
+
+    const applySectionOrder = (sectionsList) => {
+      if (sectionOrder.value.length === 0) return sectionsList
+
+      return [...sectionsList].sort((a, b) => {
+        let aIdx = sectionOrder.value.indexOf(a.name)
+        let bIdx = sectionOrder.value.indexOf(b.name)
+        // Sections not in order list go to end, in original order
+        if (aIdx === -1 && bIdx === -1) return 0
+        if (aIdx === -1) return 1
+        if (bIdx === -1) return -1
+        return aIdx - bIdx
+      })
+    }
+
+    const moveSectionUp = (section) => {
+      const currentSections = sections.value.map(s => s.name)
+      const idx = currentSections.indexOf(section.name)
+      if (idx <= 0) return
+
+      // Swap with previous section
+      const temp = currentSections[idx - 1]
+      currentSections[idx - 1] = currentSections[idx]
+      currentSections[idx] = temp
+
+      sectionOrder.value = currentSections
+      saveSectionOrder()
+      // Re-sort sections in place
+      sections.value = applySectionOrder(sections.value)
+      allSections.value = applySectionOrder(allSections.value)
+    }
+
+    const moveSectionDown = (section) => {
+      const currentSections = sections.value.map(s => s.name)
+      const idx = currentSections.indexOf(section.name)
+      if (idx === -1 || idx >= currentSections.length - 1) return
+
+      // Swap with next section
+      const temp = currentSections[idx + 1]
+      currentSections[idx + 1] = currentSections[idx]
+      currentSections[idx] = temp
+
+      sectionOrder.value = currentSections
+      saveSectionOrder()
+      // Re-sort sections in place
+      sections.value = applySectionOrder(sections.value)
+      allSections.value = applySectionOrder(allSections.value)
+    }
+
     // Delete modal dragging
     const startDeleteDrag = (e) => {
       if (e.target.closest('.close-btn')) return
@@ -900,13 +1081,17 @@ export default {
 
         if (data && data.length > 0) {
           const dates = data.flatMap(t => [new Date(t.start_date), new Date(t.end_date)])
-          const minDate = new Date(Math.min(...dates))
           const maxDate = new Date(Math.max(...dates))
-          // Add 2 weeks padding
-          minDate.setDate(minDate.getDate() - 14)
+          // Add 2 weeks padding to end
           maxDate.setDate(maxDate.getDate() + 14)
-          startDate.value = dayjs(minDate)
           endDate.value = dayjs(maxDate)
+
+          // Only auto-set start date if user hasn't manually set one
+          if (!userSetStartDate.value) {
+            const minDate = new Date(Math.min(...dates))
+            minDate.setDate(minDate.getDate() - 14)
+            startDate.value = dayjs(minDate)
+          }
         }
       } catch (error) {
         console.error('Error loading date range:', error)
@@ -1139,6 +1324,8 @@ export default {
 
     // Print modal functions
     const openPrintModal = () => {
+      printForm.value.printMode = 'all'
+      printForm.value.selectedSections = sections.value.map(s => s.name)
       showPrintModal.value = true
       printModalPosition.value = { x: null, y: null }
     }
@@ -1199,6 +1386,28 @@ export default {
       const pageWidth = isLandscape ? size.height : size.width
       const pageHeight = isLandscape ? size.width : size.height
 
+      // Build section hiding CSS if printing selected sections only
+      let sectionHideCSS = ''
+      if (printForm.value.printMode === 'selected') {
+        const selectedNames = printForm.value.selectedSections
+        // Hide unselected sections by adding a data attribute and CSS
+        const sectionGroups = document.querySelectorAll('.section-group')
+        sectionGroups.forEach(group => {
+          const titleEl = group.querySelector('.section-title-text')
+          if (titleEl) {
+            const name = titleEl.textContent.trim()
+            if (!selectedNames.includes(name)) {
+              group.setAttribute('data-print-hide', 'true')
+            }
+          }
+        })
+        sectionHideCSS = `
+          .section-group[data-print-hide="true"] {
+            display: none !important;
+          }
+        `
+      }
+
       const printStyle = document.createElement('style')
       printStyle.id = 'dynamic-print-style'
       printStyle.textContent = `
@@ -1206,6 +1415,7 @@ export default {
           size: ${pageWidth} ${pageHeight};
           margin: 0.25in;
         }
+        ${sectionHideCSS}
       `
       document.head.appendChild(printStyle)
 
@@ -1218,6 +1428,10 @@ export default {
         const cleanup = () => {
           const el = document.getElementById('dynamic-print-style')
           if (el) el.remove()
+          // Remove data-print-hide attributes
+          document.querySelectorAll('[data-print-hide]').forEach(el => {
+            el.removeAttribute('data-print-hide')
+          })
         }
         // Use onafterprint if available, otherwise timeout fallback
         if (window.onafterprint !== undefined) {
@@ -1348,7 +1562,37 @@ export default {
           await loadTasks()
           closeModal()
         } else if (modalType.value === 'startDate') {
-          startDate.value = dayjs(projectStartDate.value)
+          const newStart = dayjs(projectStartDate.value)
+
+          if (moveExisting.value) {
+            // Calculate the delta between old start and new start
+            const oldStart = startDate.value
+            const daysDelta = newStart.diff(oldStart, 'day')
+
+            if (daysDelta !== 0) {
+              // Fetch all tasks and shift their dates
+              const { data: allTasks, error: fetchError } = await supabase
+                .from('tasks')
+                .select('id, start_date, end_date')
+              if (fetchError) throw fetchError
+
+              for (const task of allTasks) {
+                const newTaskStart = dayjs(task.start_date).add(daysDelta, 'day').format('YYYY-MM-DD')
+                const newTaskEnd = dayjs(task.end_date).add(daysDelta, 'day').format('YYYY-MM-DD')
+                const { error: updateError } = await supabase
+                  .from('tasks')
+                  .update({ start_date: newTaskStart, end_date: newTaskEnd })
+                  .eq('id', task.id)
+                if (updateError) throw updateError
+              }
+            }
+          }
+
+          startDate.value = newStart
+          userSetStartDate.value = true
+          moveExisting.value = false
+          await loadDateRange()
+          await loadTasks()
           closeModal()
         } else if (modalType.value === 'workDays') {
           // Work days are stored locally - affects weekend highlighting
@@ -1502,6 +1746,9 @@ export default {
           }
         })
 
+        // Apply section ordering
+        allSections.value = applySectionOrder(allSections.value)
+
         // Apply filter
         if (selectedProject.value === 'all') {
           sections.value = allSections.value
@@ -1550,6 +1797,7 @@ export default {
       timelineWidth,
       projectStartDate,
       moveExisting,
+      userSetStartDate,
       formErrors,
       isSaving,
       modalPosition,
@@ -1598,6 +1846,15 @@ export default {
       confirmDeleteSection,
       cancelDeleteSection,
       deleteSection,
+      showEditSectionModal,
+      sectionEditForm,
+      sectionEditErrors,
+      isSavingSection,
+      editSection,
+      cancelEditSection,
+      saveSectionEdit,
+      moveSectionUp,
+      moveSectionDown,
       showPrintModal,
       printForm,
       openPrintModal,
