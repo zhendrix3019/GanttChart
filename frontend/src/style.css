@@ -14,6 +14,7 @@ body {
   margin: 0;
   overflow: auto;
   position: relative;
+  padding-top: 48px;
 }
 
 .project-filter {
@@ -23,10 +24,11 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  position: sticky;
+  position: fixed;
   top: 0;
   left: 0;
-  z-index: 50;
+  right: 0;
+  z-index: 200;
 }
 
 .project-filter label {
