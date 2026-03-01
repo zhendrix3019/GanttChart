@@ -11,10 +11,10 @@
           {{ darkMode ? '☀️' : '🌙' }}
         </button>
       </div>
-      <div class="gantt-chart-wrapper">
+      <div class="gantt-chart-wrapper" :style="{ '--day-width': dayWidth + 'px' }">
         <div class="timeline-header">
           <div class="corner-cell"></div>
-          <div class="timeline-months" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
+          <div class="timeline-months" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px', ...timelineBackground }">
             <div v-for="month in months" :key="month.key" class="month-header" :style="{ width: month.width + 'px' }">
               {{ month.name }}
             </div>
@@ -23,7 +23,7 @@
 
         <div class="timeline-days-row">
           <div class="corner-cell"></div>
-          <div class="timeline-days" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
+          <div class="timeline-days" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px', ...timelineBackground }">
             <div v-for="day in days" :key="day.key" class="day-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }">
               {{ day.day }}
             </div>
@@ -34,10 +34,7 @@
           <div v-for="section in sections" :key="section.id" class="section-group">
             <div class="task-row section-title-row">
               <div class="row-number"></div>
-              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
-                <div class="grid-lines" :style="{ width: timelineWidth + 'px' }">
-                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }"></div>
-                </div>
+              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px', ...timelineBackground }">
                 <div class="section-header">
                   <div class="section-move-btns">
                     <button class="section-move-btn" @click.stop="moveSectionUp(section)" title="Move Section Up">&#9650;</button>
@@ -53,11 +50,7 @@
 
             <div v-for="row in section.rows" :key="row.rowIndex" class="task-row">
               <div class="row-number">{{ row.rowNumber }}</div>
-              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px' }">
-                <div class="grid-lines" :style="{ width: timelineWidth + 'px' }">
-                  <div v-for="day in days" :key="'grid-' + day.key" class="grid-cell" :class="{ 'weekend': day.isWeekend }" :style="{ width: dayWidth + 'px', minWidth: dayWidth + 'px' }"></div>
-                </div>
-
+              <div class="timeline-area" :style="{ width: timelineWidth + 'px', minWidth: timelineWidth + 'px', ...timelineBackground }">
                 <template v-for="task in row.tasks" :key="task.id">
                   <div v-if="task.type === 'milestone'"
                        class="milestone"
@@ -624,6 +617,31 @@ export default {
     // Total timeline width based on number of days
     const timelineWidth = computed(() => {
       return days.value.length * dayWidth.value
+    })
+
+    // CSS background for grid lines and weekend highlights
+    const timelineBackground = computed(() => {
+      const dw = dayWidth.value
+      const isDark = darkMode.value
+      const lineColor = isDark ? '#2a2a3e' : '#ddd'
+      const weekendColor = isDark ? '#12203a' : '#F0F0F0'
+
+      // Build weekend highlight stops
+      const weekendStops = []
+      days.value.forEach((day, i) => {
+        if (day.isWeekend) {
+          const start = i * dw
+          const end = start + dw
+          weekendStops.push(`transparent ${start}px, ${weekendColor} ${start}px, ${weekendColor} ${end}px, transparent ${end}px`)
+        }
+      })
+
+      const gridLine = `repeating-linear-gradient(to right, transparent 0px, transparent ${dw - 1}px, ${lineColor} ${dw - 1}px, ${lineColor} ${dw}px)`
+      if (weekendStops.length > 0) {
+        const weekendBg = `linear-gradient(to right, ${weekendStops.join(', ')})`
+        return { backgroundImage: `${gridLine}, ${weekendBg}`, backgroundSize: `${timelineWidth.value}px 100%` }
+      }
+      return { backgroundImage: gridLine }
     })
 
     const getMilestoneStyle = (task) => {
@@ -1815,6 +1833,7 @@ export default {
       textForm,
       dayWidth,
       timelineWidth,
+      timelineBackground,
       projectStartDate,
       moveExisting,
       userSetStartDate,

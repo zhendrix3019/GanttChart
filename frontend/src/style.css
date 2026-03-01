@@ -23,6 +23,10 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 50;
 }
 
 .project-filter label {
@@ -209,7 +213,7 @@ body {
 
 .section-edit-btn {
   position: absolute;
-  left: -8px;
+  right: -8px;
   top: -8px;
   width: 18px;
   height: 18px;
@@ -235,7 +239,7 @@ body {
 
 .section-delete-btn {
   position: absolute;
-  right: -8px;
+  right: -30px;
   top: -8px;
   width: 18px;
   height: 18px;
@@ -293,28 +297,7 @@ body {
   /* width set via inline style based on days */
 }
 
-.grid-lines {
-  display: flex;
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  pointer-events: none;
-  overflow: visible;
-  flex-wrap: nowrap;
-}
-
-.grid-cell {
-  width: 25px;
-  min-width: 25px;
-  flex-shrink: 0;
-  border-right: 1px solid #eee;
-  height: 100%;
-}
-
-.grid-cell.weekend {
-  background: #F8F8F8;
-}
+/* Grid lines now rendered via CSS background on .timeline-area */
 
 .task-bar {
   position: absolute;
@@ -1050,13 +1033,7 @@ html.dark-mode .row-number {
   border-right-color: #444;
 }
 
-html.dark-mode .grid-cell {
-  border-right-color: #2a2a3e;
-}
-
-html.dark-mode .grid-cell.weekend {
-  background: #12203a;
-}
+/* Dark mode grid lines handled via timelineBackground computed style */
 
 html.dark-mode .task-text {
   color: white;
