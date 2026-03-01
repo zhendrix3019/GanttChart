@@ -7,6 +7,9 @@
           <option value="all">All Projects</option>
           <option v-for="project in projectList" :key="project" :value="project">{{ project }}</option>
         </select>
+        <button class="dark-mode-btn" @click="toggleDarkMode" :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+          {{ darkMode ? '☀️' : '🌙' }}
+        </button>
       </div>
       <div class="gantt-chart-wrapper">
         <div class="timeline-header">
@@ -543,6 +546,23 @@ export default {
     const projectStartDate = ref('')
     const moveExisting = ref(false)
     const userSetStartDate = ref(false) // Track if user manually set start date
+
+    // Dark mode
+    const darkMode = ref(localStorage.getItem('gantt_dark_mode') === 'true')
+    const applyDarkMode = (enabled) => {
+      if (enabled) {
+        document.documentElement.classList.add('dark-mode')
+      } else {
+        document.documentElement.classList.remove('dark-mode')
+      }
+    }
+    const toggleDarkMode = () => {
+      darkMode.value = !darkMode.value
+      localStorage.setItem('gantt_dark_mode', darkMode.value)
+      applyDarkMode(darkMode.value)
+    }
+    // Apply on load
+    applyDarkMode(darkMode.value)
 
     // Project filtering
     const selectedProject = ref('all')
@@ -1802,6 +1822,8 @@ export default {
       isSaving,
       modalPosition,
       draggingTask,
+      darkMode,
+      toggleDarkMode,
       selectedProject,
       projectList,
       getMilestoneStyle,

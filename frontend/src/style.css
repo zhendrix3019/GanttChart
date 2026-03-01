@@ -51,6 +51,27 @@ body {
   box-shadow: 0 0 3px rgba(76, 175, 80, 0.3);
 }
 
+.dark-mode-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+
+.dark-mode-btn:hover {
+  background: #e0e0e0;
+  border-color: #999;
+}
+
 .gantt-chart-wrapper {
   position: relative;
   min-width: 100%;
@@ -100,6 +121,7 @@ body {
 .day-cell {
   width: 25px;
   min-width: 25px;
+  flex-shrink: 0;
   text-align: center;
   padding: 2px 0;
   font-size: 10px;
@@ -133,7 +155,8 @@ body {
   transform: translateY(-50%);
   z-index: 5;
   background: white;
-  padding: 2px 5px;
+  padding: 6px 65px 6px 30px;
+  margin-left: -25px;
 }
 
 .section-title-text {
@@ -279,12 +302,14 @@ body {
   left: 0;
   bottom: 0;
   pointer-events: none;
-  /* Remove right: 0 - let width be determined by grid cells */
+  overflow: visible;
+  flex-wrap: nowrap;
 }
 
 .grid-cell {
   width: 25px;
   min-width: 25px;
+  flex-shrink: 0;
   border-right: 1px solid #eee;
   height: 100%;
 }
@@ -915,6 +940,233 @@ body {
 .logout-btn:hover {
   background: rgba(255, 255, 255, 0.3);
   border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Dark Mode Theme */
+html.dark-mode body {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}
+
+html.dark-mode .gantt-container {
+  background: #1a1a2e;
+}
+
+html.dark-mode .project-filter {
+  background: #16213e;
+  border-bottom-color: #333;
+}
+
+html.dark-mode .project-filter label {
+  color: #ccc;
+}
+
+html.dark-mode .project-filter select {
+  background: #0f3460;
+  color: #e0e0e0;
+  border-color: #444;
+}
+
+html.dark-mode .dark-mode-btn {
+  background: #0f3460;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+html.dark-mode .dark-mode-btn:hover {
+  background: #1a4a7a;
+  border-color: #666;
+}
+
+html.dark-mode .gantt-chart-wrapper {
+  border-color: #444;
+  background: #1a1a2e;
+}
+
+html.dark-mode .timeline-header {
+  border-bottom-color: #444;
+  background: #16213e;
+}
+
+html.dark-mode .corner-cell {
+  background: #1a1a2e;
+  border-right-color: #444;
+}
+
+html.dark-mode .month-header {
+  background: #16213e;
+  color: #e0e0e0;
+  border-right-color: #555;
+}
+
+html.dark-mode .timeline-days-row {
+  background: #0f3460;
+  border-bottom-color: #444;
+}
+
+html.dark-mode .day-cell {
+  color: #ccc;
+  border-right-color: #333;
+}
+
+html.dark-mode .day-cell.weekend {
+  background: #12203a;
+}
+
+html.dark-mode .gantt-body {
+  background: #1a1a2e;
+}
+
+html.dark-mode .section-group {
+  border-bottom-color: #444;
+}
+
+html.dark-mode .section-title-row {
+  background: #1a1a2e;
+  border-bottom-color: #333;
+}
+
+html.dark-mode .section-header {
+  background: #1a1a2e;
+}
+
+html.dark-mode .section-title-text {
+  color: #e0e0e0;
+}
+
+html.dark-mode .section-sub-header {
+  color: #aaa;
+}
+
+html.dark-mode .task-row {
+  border-bottom-color: #333;
+}
+
+html.dark-mode .task-row:hover {
+  background: #16213e;
+}
+
+html.dark-mode .row-number {
+  background: #1a1a2e;
+  color: #888;
+  border-right-color: #444;
+}
+
+html.dark-mode .grid-cell {
+  border-right-color: #2a2a3e;
+}
+
+html.dark-mode .grid-cell.weekend {
+  background: #12203a;
+}
+
+html.dark-mode .task-text {
+  color: white;
+}
+
+html.dark-mode .task-date-start,
+html.dark-mode .task-date-end {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
+html.dark-mode .milestone-label {
+  background: rgba(26, 26, 46, 0.9);
+  color: #e0e0e0;
+}
+
+html.dark-mode .text-item {
+  background: rgba(26, 26, 46, 0.9);
+}
+
+html.dark-mode .controls-panel {
+  background: #16213e;
+  border-color: #444;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+html.dark-mode .modal-content {
+  background-color: #1a1a2e;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+html.dark-mode .modal-header {
+  background: #16213e;
+  border-bottom-color: #333;
+}
+
+html.dark-mode .modal-header h2 {
+  color: #e0e0e0;
+}
+
+html.dark-mode .close-btn {
+  color: #aaa;
+}
+
+html.dark-mode .close-btn:hover {
+  color: #fff;
+}
+
+html.dark-mode .modal-body {
+  color: #e0e0e0;
+}
+
+html.dark-mode .modal-footer {
+  border-top-color: #333;
+}
+
+html.dark-mode .form-group label {
+  color: #ccc;
+}
+
+html.dark-mode .form-group input,
+html.dark-mode .form-group select {
+  background: #0f3460;
+  color: #e0e0e0;
+  border-color: #444;
+}
+
+html.dark-mode .checkbox-group {
+  background: #16213e;
+}
+
+html.dark-mode .checkbox-group label {
+  color: #ccc;
+}
+
+html.dark-mode .instructions {
+  background: #16213e;
+  border-top-color: #444;
+}
+
+html.dark-mode .instruction {
+  color: #5b9aff;
+}
+
+html.dark-mode .delete-item-info {
+  background: #16213e;
+  border-color: #333;
+}
+
+html.dark-mode .delete-item-info p {
+  color: #ccc;
+}
+
+html.dark-mode .delete-item-info strong {
+  color: #e0e0e0;
+}
+
+html.dark-mode .delete-notice {
+  color: #ff6b7a;
+}
+
+html.dark-mode .form-errors {
+  background-color: #3a1520;
+  border-color: #c62828;
+}
+
+html.dark-mode .print-section-list {
+  border-color: #444;
 }
 
 @media print {
