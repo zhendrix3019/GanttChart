@@ -128,7 +128,7 @@
         <button @click="createMilestone" class="control-btn">Create Milestone</button>
         <button @click="createTimeline" class="control-btn">Create Timeline</button>
         <button @click="addTextLine" class="control-btn">Add Text</button>
-        <button @click="openPrintModal" class="control-btn" style="background: #2196F3;">Print</button>
+        <button @click="openPrintModal" class="control-btn" style="background: #2196F3;">Print / Export PDF</button>
       </div>
     </div>
 
@@ -351,37 +351,15 @@
       </div>
     </div>
 
-    <!-- Print Settings Modal -->
+    <!-- Print / Export PDF Modal -->
     <div v-if="showPrintModal" class="modal" @click.self="closePrintModal">
       <div class="modal-content" :style="getPrintModalStyle()">
         <div class="modal-header" @mousedown="startPrintDrag">
-          <h2>Print Settings</h2>
+          <h2>Print / Export PDF</h2>
           <button @click.stop="closePrintModal" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>Paper Size:</label>
-            <select v-model="printForm.paperSize">
-              <option value="letter">8.5" x 11" (Letter)</option>
-              <option value="tabloid">11" x 17" (Tabloid)</option>
-              <option value="archD">24" x 36" (Arch D)</option>
-            </select>
-            <label>Orientation:</label>
-            <div class="checkbox-group horizontal">
-              <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
-              <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
-            </div>
-            <label>Scale / Fit:</label>
-            <div class="checkbox-group">
-              <label><input type="radio" v-model="printForm.fitMode" value="actual"> Actual Size (may span multiple pages)</label>
-              <label><input type="radio" v-model="printForm.fitMode" value="fit-page"> Fit to Page (scale chart to fill one page per section)</label>
-              <label><input type="radio" v-model="printForm.fitMode" value="fit-width"> Fit Width Only (may compress height on long schedules)</label>
-            </div>
-            <label>Pagination:</label>
-            <div class="checkbox-group">
-              <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page (best for readability)</label>
-              <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (No Page Breaks)</label>
-            </div>
             <label>Sections to Print:</label>
             <div class="checkbox-group horizontal">
               <label><input type="radio" v-model="printForm.printMode" value="all"> All Sections</label>
@@ -393,13 +371,33 @@
                 {{ section.name }}
               </label>
             </div>
+            <label>Paper Size (for PDF export):</label>
+            <select v-model="printForm.paperSize">
+              <option value="archD">24" x 36" (Arch D)</option>
+              <option value="tabloid">11" x 17" (Tabloid)</option>
+              <option value="letter">8.5" x 11" (Letter)</option>
+            </select>
+            <label>Orientation:</label>
+            <div class="checkbox-group horizontal">
+              <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
+              <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
+            </div>
+            <label>PDF Layout:</label>
+            <div class="checkbox-group">
+              <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page</label>
+              <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (all on one page)</label>
+            </div>
           </div>
         </div>
         <div class="modal-footer" style="flex-direction: column; gap: 8px;">
-          <div style="font-size: 11px; color: #888; text-align: center;">Printer selection is available in the browser print dialog that appears next.</div>
+          <div v-if="isExporting" style="text-align: center; color: #2196F3; font-size: 13px;">
+            Generating PDF... this may take a moment for large schedules.
+          </div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; width: 100%;">
-            <button @click="closePrintModal" class="btn btn-secondary">Cancel</button>
-            <button @click="executePrint" class="btn btn-primary" style="background: #2196F3;">Print</button>
+            <button @click="closePrintModal" class="btn btn-secondary" :disabled="isExporting">Cancel</button>
+            <button @click="exportPDF" class="btn btn-primary" style="background: #2196F3;" :disabled="isExporting">
+              {{ isExporting ? 'Exporting...' : 'Export PDF' }}
+            </button>
           </div>
         </div>
       </div>
@@ -411,6 +409,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from './supabase'
 import dayjs from 'dayjs'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 
 // Data validation helpers
 const isValidHexColor = (color) => /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color)
@@ -484,13 +484,13 @@ export default {
     // Print modal state
     const showPrintModal = ref(false)
     const printForm = ref({
-      paperSize: 'letter',
-      orientation: 'landscape',
       printMode: 'all',          // 'all' or 'selected'
       selectedSections: [],      // section names to print
       pagination: 'section',     // 'section' = one section per page, 'none' = continuous
-      fitMode: 'fit-page'        // 'actual' = print at current scale, 'fit-page' = fit both dimensions, 'fit-width' = shrink to fit page width
+      paperSize: 'archD',        // 'archD' = 24x36, 'tabloid' = 11x17, 'letter' = 8.5x11
+      orientation: 'landscape'   // 'landscape' or 'portrait'
     })
+    const isExporting = ref(false)
     const printModalPosition = ref({ x: null, y: null })
     const isPrintDragging = ref(false)
     const printDragOffset = ref({ x: 0, y: 0 })
@@ -1432,127 +1432,153 @@ export default {
       }
     }
 
-    const executePrint = () => {
-      const sizeMap = {
-        letter: { width: '8.5in', height: '11in' },
-        tabloid: { width: '11in', height: '17in' },
-        archD: { width: '24in', height: '36in' }
-      }
+    const exportPDF = async () => {
+      isExporting.value = true
 
-      const size = sizeMap[printForm.value.paperSize]
-      const isLandscape = printForm.value.orientation === 'landscape'
+      try {
+        // Paper sizes in inches
+        const sizeMap = {
+          letter: [8.5, 11],
+          tabloid: [11, 17],
+          archD: [24, 36]
+        }
+        const [paperW, paperH] = sizeMap[printForm.value.paperSize]
+        const isLandscape = printForm.value.orientation === 'landscape'
+        const pageW = isLandscape ? Math.max(paperW, paperH) : Math.min(paperW, paperH)
+        const pageH = isLandscape ? Math.min(paperW, paperH) : Math.max(paperW, paperH)
+        const margin = 0.25 // inches
 
-      // Build @page CSS with the chosen size and orientation
-      const pageWidth = isLandscape ? size.height : size.width
-      const pageHeight = isLandscape ? size.width : size.height
+        // Determine which sections to capture
+        const selectedNames = printForm.value.printMode === 'selected'
+          ? printForm.value.selectedSections
+          : sections.value.map(s => s.name)
 
-      // Build section hiding CSS if printing selected sections only
-      let sectionHideCSS = ''
-      if (printForm.value.printMode === 'selected') {
-        const selectedNames = printForm.value.selectedSections
-        // Hide unselected sections by adding a data attribute and CSS
+        // Hide UI elements for capture
+        const wrapper = document.querySelector('.gantt-chart-wrapper')
+        const controlsPanel = document.querySelector('.controls-panel')
+        const projectFilter = document.querySelector('.project-filter')
+        if (controlsPanel) controlsPanel.style.display = 'none'
+        if (projectFilter) projectFilter.style.display = 'none'
+
+        // Hide edit/delete/move buttons
+        const hideSelectors = ['.edit-btn', '.delete-btn', '.section-delete-btn', '.section-edit-btn', '.section-move-btns', '.resize-handle']
+        const hiddenEls = []
+        hideSelectors.forEach(sel => {
+          document.querySelectorAll(sel).forEach(el => {
+            hiddenEls.push({ el, prev: el.style.display })
+            el.style.display = 'none'
+          })
+        })
+
+        // Hide unselected sections
         const sectionGroups = document.querySelectorAll('.section-group')
+        const hiddenSections = []
         sectionGroups.forEach(group => {
           const titleEl = group.querySelector('.section-title-text')
-          if (titleEl) {
-            const name = titleEl.textContent.trim()
-            if (!selectedNames.includes(name)) {
-              group.setAttribute('data-print-hide', 'true')
-            }
+          if (titleEl && !selectedNames.includes(titleEl.textContent.trim())) {
+            hiddenSections.push({ el: group, prev: group.style.display })
+            group.style.display = 'none'
           }
         })
-        sectionHideCSS = `
-          .section-group[data-print-hide="true"] {
-            display: none !important;
+
+        const pdf = new jsPDF({
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          unit: 'in',
+          format: [pageW, pageH]
+        })
+
+        const usableW = pageW - margin * 2
+        const usableH = pageH - margin * 2
+
+        if (printForm.value.pagination === 'section') {
+          // One section per page — capture header + each visible section separately
+          const header = document.querySelector('.timeline-header')
+          const daysRow = document.querySelector('.timeline-days-row')
+          const visibleSections = Array.from(sectionGroups).filter(g => g.style.display !== 'none')
+
+          for (let i = 0; i < visibleSections.length; i++) {
+            if (i > 0) pdf.addPage([pageW, pageH], isLandscape ? 'landscape' : 'portrait')
+
+            // Temporarily hide other sections to capture just this one
+            const otherSections = visibleSections.filter((_, idx) => idx !== i)
+            otherSections.forEach(s => s.style.display = 'none')
+
+            // Capture the wrapper (header + days + this section)
+            const canvas = await html2canvas(wrapper, {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              width: wrapper.scrollWidth,
+              height: wrapper.scrollHeight,
+              windowWidth: wrapper.scrollWidth + 100
+            })
+
+            // Restore other sections
+            otherSections.forEach(s => s.style.display = '')
+
+            // Scale image to fit the page
+            const imgW = canvas.width
+            const imgH = canvas.height
+            const scaleToFit = Math.min(usableW / (imgW / 96 / 2), usableH / (imgH / 96 / 2))
+            const finalW = (imgW / 96 / 2) * scaleToFit
+            const finalH = (imgH / 96 / 2) * scaleToFit
+
+            const imgData = canvas.toDataURL('image/png')
+            pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
           }
-        `
-      }
-
-      // Build pagination CSS
-      let paginationCSS = ''
-      if (printForm.value.pagination === 'section') {
-        paginationCSS = `
-          .section-group {
-            page-break-before: always;
-            break-before: page;
-          }
-          .section-group:first-child {
-            page-break-before: avoid;
-            break-before: avoid;
-          }
-        `
-      }
-
-      // Build fit/scale CSS
-      let fitCSS = ''
-      if (printForm.value.fitMode === 'fit-width' || printForm.value.fitMode === 'fit-page') {
-        const wrapper = document.querySelector('.gantt-chart-wrapper')
-        if (wrapper) {
-          const chartWidth = wrapper.scrollWidth
-          const chartHeight = wrapper.scrollHeight
-          // Parse page dimensions to pixels (approximate: 96 DPI), subtract margins (0.25in * 2 = 0.5in)
-          const pageWidthPx = parseFloat(pageWidth) * 96 - 48
-          const pageHeightPx = parseFloat(pageHeight) * 96 - 48
-
-          let scale = 1
-          if (printForm.value.fitMode === 'fit-page') {
-            // Scale to fit both width AND height — use the smaller scale so nothing gets cut off
-            const scaleW = pageWidthPx / chartWidth
-            const scaleH = pageHeightPx / chartHeight
-            scale = Math.min(scaleW, scaleH, 1) // never scale up
-          } else {
-            // fit-width: only fit the width
-            scale = Math.min(pageWidthPx / chartWidth, 1)
-          }
-
-          if (scale < 1) {
-            fitCSS = `
-              @media print {
-                .gantt-chart-wrapper {
-                  transform: scale(${scale.toFixed(4)}) !important;
-                  transform-origin: top left !important;
-                  width: ${chartWidth}px !important;
-                }
-              }
-            `
-          }
-        }
-      }
-
-      const printStyle = document.createElement('style')
-      printStyle.id = 'dynamic-print-style'
-      printStyle.textContent = `
-        @page {
-          size: ${pageWidth} ${pageHeight};
-          margin: 0.25in;
-        }
-        ${sectionHideCSS}
-        ${paginationCSS}
-        ${fitCSS}
-      `
-      document.head.appendChild(printStyle)
-
-      closePrintModal()
-
-      // Small delay so modal closes before print dialog opens
-      setTimeout(() => {
-        window.print()
-        // Clean up after print dialog closes
-        const cleanup = () => {
-          const el = document.getElementById('dynamic-print-style')
-          if (el) el.remove()
-          // Remove data-print-hide attributes
-          document.querySelectorAll('[data-print-hide]').forEach(el => {
-            el.removeAttribute('data-print-hide')
-          })
-        }
-        // Use onafterprint if available, otherwise timeout fallback
-        if (window.onafterprint !== undefined) {
-          window.addEventListener('afterprint', cleanup, { once: true })
         } else {
-          setTimeout(cleanup, 1000)
+          // Continuous — capture entire visible chart as one image
+          const canvas = await html2canvas(wrapper, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: wrapper.scrollWidth,
+            height: wrapper.scrollHeight,
+            windowWidth: wrapper.scrollWidth + 100
+          })
+
+          const imgW = canvas.width
+          const imgH = canvas.height
+          // Scale to fit page width, let height determine number of pages
+          const scaleToFit = usableW / (imgW / 96 / 2)
+          const finalW = usableW
+          const finalH = (imgH / 96 / 2) * scaleToFit
+
+          const imgData = canvas.toDataURL('image/png')
+
+          if (finalH <= usableH) {
+            // Fits on one page
+            pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
+          } else {
+            // Split across multiple pages
+            const totalPages = Math.ceil(finalH / usableH)
+            for (let p = 0; p < totalPages; p++) {
+              if (p > 0) pdf.addPage([pageW, pageH], isLandscape ? 'landscape' : 'portrait')
+              // Offset the image vertically for each page
+              const yOffset = margin - (p * usableH)
+              pdf.addImage(imgData, 'PNG', margin, yOffset, finalW, finalH)
+            }
+          }
         }
-      }, 200)
+
+        // Restore UI elements
+        hiddenSections.forEach(({ el, prev }) => el.style.display = prev)
+        hiddenEls.forEach(({ el, prev }) => el.style.display = prev)
+        if (controlsPanel) controlsPanel.style.display = ''
+        if (projectFilter) projectFilter.style.display = ''
+
+        // Save the PDF
+        const timestamp = dayjs().format('YYYY-MM-DD_HHmm')
+        const paperLabel = printForm.value.paperSize === 'archD' ? '24x36' : printForm.value.paperSize === 'tabloid' ? '11x17' : '8.5x11'
+        pdf.save(`Gantt_Schedule_${paperLabel}_${timestamp}.pdf`)
+
+        closePrintModal()
+      } catch (error) {
+        console.error('Error exporting PDF:', error)
+        alert('Failed to export PDF: ' + error.message)
+      } finally {
+        isExporting.value = false
+      }
     }
 
     const editTask = (task) => {
@@ -1978,7 +2004,8 @@ export default {
       closePrintModal,
       startPrintDrag,
       getPrintModalStyle,
-      executePrint
+      exportPDF,
+      isExporting
     }
   }
 }
