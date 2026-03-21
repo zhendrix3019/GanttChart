@@ -40,9 +40,9 @@
                     <button class="section-move-btn" @click.stop="moveSectionUp(section)" title="Move Section Up">&#9650;</button>
                     <button class="section-move-btn" @click.stop="moveSectionDown(section)" title="Move Section Down">&#9660;</button>
                   </div>
+                  <button class="section-edit-btn" @click.stop="editSection(section)" title="Edit Section">&#9998;</button>
                   <div class="section-title-text">{{ section.name }}</div>
                   <div v-if="section.sub_header" class="section-sub-header">{{ section.sub_header }}</div>
-                  <button class="section-edit-btn" @click.stop="editSection(section)" title="Edit Section">&#9998;</button>
                   <button class="section-delete-btn" @click.stop="confirmDeleteSection(section)" title="Delete Section">×</button>
                 </div>
               </div>
@@ -192,10 +192,11 @@
           <div v-else-if="modalType === 'startDate'" class="form-group">
             <label>Project Start Date:</label>
             <input v-model="projectStartDate" type="date">
-            <label>
-              <input v-model="moveExisting" type="checkbox">
-              Move existing activities
-            </label>
+            <label>When changing the start date:</label>
+            <div class="checkbox-group">
+              <label><input type="radio" v-model="startDateMode" value="shift-activities"> Shift all activities with the date change</label>
+              <label><input type="radio" v-model="startDateMode" value="shift-dates-only"> Shift dates only (activities stay on their calendar dates)</label>
+            </div>
           </div>
 
           <div v-else-if="modalType === 'workDays'" class="form-group">
@@ -370,6 +371,17 @@
               <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
               <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
             </div>
+            <label>Scale / Fit:</label>
+            <div class="checkbox-group">
+              <label><input type="radio" v-model="printForm.fitMode" value="actual"> Actual Size (may span multiple pages)</label>
+              <label><input type="radio" v-model="printForm.fitMode" value="fit-page"> Fit to Page (scale chart to fill one page per section)</label>
+              <label><input type="radio" v-model="printForm.fitMode" value="fit-width"> Fit Width Only (may compress height on long schedules)</label>
+            </div>
+            <label>Pagination:</label>
+            <div class="checkbox-group">
+              <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page (best for readability)</label>
+              <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (No Page Breaks)</label>
+            </div>
             <label>Sections to Print:</label>
             <div class="checkbox-group horizontal">
               <label><input type="radio" v-model="printForm.printMode" value="all"> All Sections</label>
@@ -383,9 +395,12 @@
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="closePrintModal" class="btn btn-secondary">Cancel</button>
-          <button @click="executePrint" class="btn btn-primary" style="background: #2196F3;">Print</button>
+        <div class="modal-footer" style="flex-direction: column; gap: 8px;">
+          <div style="font-size: 11px; color: #888; text-align: center;">Printer selection is available in the browser print dialog that appears next.</div>
+          <div style="display: flex; gap: 8px; justify-content: flex-end; width: 100%;">
+            <button @click="closePrintModal" class="btn btn-secondary">Cancel</button>
+            <button @click="executePrint" class="btn btn-primary" style="background: #2196F3;">Print</button>
+          </div>
         </div>
       </div>
     </div>
@@ -472,7 +487,9 @@ export default {
       paperSize: 'letter',
       orientation: 'landscape',
       printMode: 'all',          // 'all' or 'selected'
-      selectedSections: []       // section names to print
+      selectedSections: [],      // section names to print
+      pagination: 'section',     // 'section' = one section per page, 'none' = continuous
+      fitMode: 'fit-page'        // 'actual' = print at current scale, 'fit-page' = fit both dimensions, 'fit-width' = shrink to fit page width
     })
     const printModalPosition = ref({ x: null, y: null })
     const isPrintDragging = ref(false)
@@ -537,8 +554,13 @@ export default {
     const dayWidth = ref(25)
 
     const projectStartDate = ref('')
-    const moveExisting = ref(false)
-    const userSetStartDate = ref(false) // Track if user manually set start date
+    const startDateMode = ref('shift-dates-only')  // 'shift-activities' or 'shift-dates-only'
+    // Persist user-set start date across page reloads
+    const savedStartDate = localStorage.getItem('gantt_user_start_date')
+    const userSetStartDate = ref(!!savedStartDate)
+    if (savedStartDate) {
+      startDate.value = dayjs(savedStartDate)
+    }
 
     // Dark mode
     const darkMode = ref(localStorage.getItem('gantt_dark_mode') === 'true')
@@ -1446,6 +1468,57 @@ export default {
         `
       }
 
+      // Build pagination CSS
+      let paginationCSS = ''
+      if (printForm.value.pagination === 'section') {
+        paginationCSS = `
+          .section-group {
+            page-break-before: always;
+            break-before: page;
+          }
+          .section-group:first-child {
+            page-break-before: avoid;
+            break-before: avoid;
+          }
+        `
+      }
+
+      // Build fit/scale CSS
+      let fitCSS = ''
+      if (printForm.value.fitMode === 'fit-width' || printForm.value.fitMode === 'fit-page') {
+        const wrapper = document.querySelector('.gantt-chart-wrapper')
+        if (wrapper) {
+          const chartWidth = wrapper.scrollWidth
+          const chartHeight = wrapper.scrollHeight
+          // Parse page dimensions to pixels (approximate: 96 DPI), subtract margins (0.25in * 2 = 0.5in)
+          const pageWidthPx = parseFloat(pageWidth) * 96 - 48
+          const pageHeightPx = parseFloat(pageHeight) * 96 - 48
+
+          let scale = 1
+          if (printForm.value.fitMode === 'fit-page') {
+            // Scale to fit both width AND height — use the smaller scale so nothing gets cut off
+            const scaleW = pageWidthPx / chartWidth
+            const scaleH = pageHeightPx / chartHeight
+            scale = Math.min(scaleW, scaleH, 1) // never scale up
+          } else {
+            // fit-width: only fit the width
+            scale = Math.min(pageWidthPx / chartWidth, 1)
+          }
+
+          if (scale < 1) {
+            fitCSS = `
+              @media print {
+                .gantt-chart-wrapper {
+                  transform: scale(${scale.toFixed(4)}) !important;
+                  transform-origin: top left !important;
+                  width: ${chartWidth}px !important;
+                }
+              }
+            `
+          }
+        }
+      }
+
       const printStyle = document.createElement('style')
       printStyle.id = 'dynamic-print-style'
       printStyle.textContent = `
@@ -1454,6 +1527,8 @@ export default {
           margin: 0.25in;
         }
         ${sectionHideCSS}
+        ${paginationCSS}
+        ${fitCSS}
       `
       document.head.appendChild(printStyle)
 
@@ -1602,13 +1677,12 @@ export default {
         } else if (modalType.value === 'startDate') {
           const newStart = dayjs(projectStartDate.value)
 
-          if (moveExisting.value) {
-            // Calculate the delta between old start and new start
+          if (startDateMode.value === 'shift-activities') {
+            // Option A: Shift all activities by the same delta as the start date change
             const oldStart = startDate.value
             const daysDelta = newStart.diff(oldStart, 'day')
 
             if (daysDelta !== 0) {
-              // Fetch all tasks and shift their dates
               const { data: allTasks, error: fetchError } = await supabase
                 .from('tasks')
                 .select('id, start_date, end_date')
@@ -1625,10 +1699,12 @@ export default {
               }
             }
           }
+          // Option B (shift-dates-only): Just change the start date, activities stay on their calendar dates
 
           startDate.value = newStart
           userSetStartDate.value = true
-          moveExisting.value = false
+          localStorage.setItem('gantt_user_start_date', newStart.format('YYYY-MM-DD'))
+          startDateMode.value = 'shift-dates-only'
           await loadDateRange()
           await loadTasks()
           closeModal()
@@ -1835,7 +1911,7 @@ export default {
       timelineWidth,
       timelineBackground,
       projectStartDate,
-      moveExisting,
+      startDateMode,
       userSetStartDate,
       formErrors,
       isSaving,
