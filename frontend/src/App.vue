@@ -1439,18 +1439,17 @@ export default {
       isExporting.value = true
 
       try {
-        // Paper heights in inches — width will be calculated to fit the chart
-        // For roll printers like DesignJet T830, we scale to fill the paper height
-        // and let width be whatever the chart needs
-        const heightMap = {
-          letter: { portrait: 11, landscape: 8.5 },
-          tabloid: { portrait: 17, landscape: 11 },
-          archD: { portrait: 36, landscape: 24 }
+        // Fixed paper dimensions in inches [width, height]
+        const paperSizes = {
+          letter:  { portrait: [8.5, 11],  landscape: [11, 8.5] },
+          tabloid: { portrait: [11, 17],   landscape: [17, 11] },
+          archD:   { portrait: [24, 36],   landscape: [36, 24] }
         }
         const isLandscape = printForm.value.orientation === 'landscape'
-        const paperHeight = heightMap[printForm.value.paperSize][isLandscape ? 'landscape' : 'portrait']
+        const [paperW, paperH] = paperSizes[printForm.value.paperSize][isLandscape ? 'landscape' : 'portrait']
         const margin = 0.25 // inches
-        const usableH = paperHeight - margin * 2
+        const usableW = paperW - margin * 2
+        const usableH = paperH - margin * 2
 
         // Determine which sections to capture
         const selectedNames = printForm.value.printMode === 'selected'
@@ -1497,66 +1496,76 @@ export default {
             otherSections.forEach(s => s.style.display = 'none')
 
             // Capture the wrapper (header + days + this section)
+            // Calculate actual content height to avoid capturing empty space
+            const wrapperRect = wrapper.getBoundingClientRect()
+            const allContentEls = wrapper.querySelectorAll('.timeline-header, .timeline-days-row, .section-group')
+            let contentBottom = 0
+            allContentEls.forEach(el => {
+              if (el.style.display !== 'none') {
+                const r = el.getBoundingClientRect()
+                contentBottom = Math.max(contentBottom, r.bottom - wrapperRect.top)
+              }
+            })
+            const captureHeight = Math.ceil(contentBottom) + 2
+
             const canvas = await html2canvas(wrapper, {
               scale: 2,
               useCORS: true,
               logging: false,
               width: wrapper.scrollWidth,
-              height: wrapper.scrollHeight,
+              height: captureHeight,
               windowWidth: wrapper.scrollWidth + 100
             })
 
             // Restore other sections
             otherSections.forEach(s => s.style.display = '')
 
-            // Scale to fill the page HEIGHT — width follows proportionally
-            const imgWInches = canvas.width / 96 / 2
-            const imgHInches = canvas.height / 96 / 2
-            const scale = usableH / imgHInches
-            const finalH = usableH
-            const finalW = imgWInches * scale
-            const pageW = finalW + margin * 2
-
+            // Stretch to fill the full page — chart fills entire usable area
             if (i === 0) {
               pdf = new jsPDF({
-                orientation: 'landscape',
+                orientation: isLandscape ? 'landscape' : 'portrait',
                 unit: 'in',
-                format: [pageW, paperHeight]
+                format: [paperW, paperH]
               })
             } else {
-              pdf.addPage([pageW, paperHeight], 'landscape')
+              pdf.addPage([paperW, paperH], isLandscape ? 'landscape' : 'portrait')
             }
 
             const imgData = canvas.toDataURL('image/png')
-            pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
+            pdf.addImage(imgData, 'PNG', margin, margin, usableW, usableH)
           }
         } else {
           // Continuous — capture entire visible chart as one image
+          // Calculate actual content height to avoid capturing empty space
+          const wrapperRect = wrapper.getBoundingClientRect()
+          const allContentEls = wrapper.querySelectorAll('.timeline-header, .timeline-days-row, .section-group')
+          let contentBottom = 0
+          allContentEls.forEach(el => {
+            if (el.style.display !== 'none') {
+              const r = el.getBoundingClientRect()
+              contentBottom = Math.max(contentBottom, r.bottom - wrapperRect.top)
+            }
+          })
+          const captureHeight = Math.ceil(contentBottom) + 2
+
           const canvas = await html2canvas(wrapper, {
             scale: 2,
             useCORS: true,
             logging: false,
             width: wrapper.scrollWidth,
-            height: wrapper.scrollHeight,
+            height: captureHeight,
             windowWidth: wrapper.scrollWidth + 100
           })
 
-          // Scale to fill the page HEIGHT
-          const imgWInches = canvas.width / 96 / 2
-          const imgHInches = canvas.height / 96 / 2
-          const scale = usableH / imgHInches
-          const finalH = usableH
-          const finalW = imgWInches * scale
-          const pageW = finalW + margin * 2
-
+          // Stretch to fill the full page — chart fills entire usable area
           pdf = new jsPDF({
-            orientation: 'landscape',
+            orientation: isLandscape ? 'landscape' : 'portrait',
             unit: 'in',
-            format: [pageW, paperHeight]
+            format: [paperW, paperH]
           })
 
           const imgData = canvas.toDataURL('image/png')
-          pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
+          pdf.addImage(imgData, 'PNG', margin, margin, usableW, usableH)
         }
 
         // Restore UI elements
