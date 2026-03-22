@@ -371,6 +371,11 @@
                 {{ section.name }}
               </label>
             </div>
+            <label>Layout:</label>
+            <div class="checkbox-group">
+              <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page</label>
+              <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (all on one page)</label>
+            </div>
             <label>Paper Size (for PDF export):</label>
             <select v-model="printForm.paperSize">
               <option value="archD">24" x 36" (Arch D)</option>
@@ -382,11 +387,6 @@
               <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
               <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
             </div>
-            <label>PDF Layout:</label>
-            <div class="checkbox-group">
-              <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page</label>
-              <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (all on one page)</label>
-            </div>
           </div>
         </div>
         <div class="modal-footer" style="flex-direction: column; gap: 8px;">
@@ -395,6 +395,9 @@
           </div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; width: 100%;">
             <button @click="closePrintModal" class="btn btn-secondary" :disabled="isExporting">Cancel</button>
+            <button @click="directPrint" class="btn btn-primary" style="background: #4CAF50;" :disabled="isExporting">
+              Print
+            </button>
             <button @click="exportPDF" class="btn btn-primary" style="background: #2196F3;" :disabled="isExporting">
               {{ isExporting ? 'Exporting...' : 'Export PDF' }}
             </button>
@@ -1581,6 +1584,63 @@ export default {
       }
     }
 
+    const directPrint = () => {
+      // Hide unselected sections
+      const selectedNames = printForm.value.printMode === 'selected'
+        ? printForm.value.selectedSections
+        : sections.value.map(s => s.name)
+
+      const sectionGroups = document.querySelectorAll('.section-group')
+      sectionGroups.forEach(group => {
+        const titleEl = group.querySelector('.section-title-text')
+        if (titleEl && !selectedNames.includes(titleEl.textContent.trim())) {
+          group.setAttribute('data-print-hide', 'true')
+        }
+      })
+
+      // Build pagination CSS
+      let paginationCSS = ''
+      if (printForm.value.pagination === 'section') {
+        paginationCSS = `
+          .section-group {
+            page-break-before: always;
+            break-before: page;
+          }
+          .section-group:first-child {
+            page-break-before: avoid;
+            break-before: avoid;
+          }
+        `
+      }
+
+      const printStyle = document.createElement('style')
+      printStyle.id = 'dynamic-print-style'
+      printStyle.textContent = `
+        @page { margin: 0.25in; }
+        .section-group[data-print-hide="true"] { display: none !important; }
+        ${paginationCSS}
+      `
+      document.head.appendChild(printStyle)
+
+      closePrintModal()
+
+      setTimeout(() => {
+        window.print()
+        const cleanup = () => {
+          const el = document.getElementById('dynamic-print-style')
+          if (el) el.remove()
+          document.querySelectorAll('[data-print-hide]').forEach(el => {
+            el.removeAttribute('data-print-hide')
+          })
+        }
+        if (window.onafterprint !== undefined) {
+          window.addEventListener('afterprint', cleanup, { once: true })
+        } else {
+          setTimeout(cleanup, 1000)
+        }
+      }, 200)
+    }
+
     const editTask = (task) => {
       editingTaskId.value = task.id
       if (task.type === 'milestone') {
@@ -2005,6 +2065,7 @@ export default {
       startPrintDrag,
       getPrintModalStyle,
       exportPDF,
+      directPrint,
       isExporting
     }
   }
