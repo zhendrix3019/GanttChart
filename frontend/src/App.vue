@@ -1439,17 +1439,18 @@ export default {
       isExporting.value = true
 
       try {
-        // Paper sizes in inches
-        const sizeMap = {
-          letter: [8.5, 11],
-          tabloid: [11, 17],
-          archD: [24, 36]
+        // Paper heights in inches — width will be calculated to fit the chart
+        // For roll printers like DesignJet T830, we scale to fill the paper height
+        // and let width be whatever the chart needs
+        const heightMap = {
+          letter: { portrait: 11, landscape: 8.5 },
+          tabloid: { portrait: 17, landscape: 11 },
+          archD: { portrait: 36, landscape: 24 }
         }
-        const [paperW, paperH] = sizeMap[printForm.value.paperSize]
         const isLandscape = printForm.value.orientation === 'landscape'
-        const pageW = isLandscape ? Math.max(paperW, paperH) : Math.min(paperW, paperH)
-        const pageH = isLandscape ? Math.min(paperW, paperH) : Math.max(paperW, paperH)
+        const paperHeight = heightMap[printForm.value.paperSize][isLandscape ? 'landscape' : 'portrait']
         const margin = 0.25 // inches
+        const usableH = paperHeight - margin * 2
 
         // Determine which sections to capture
         const selectedNames = printForm.value.printMode === 'selected'
@@ -1484,24 +1485,13 @@ export default {
           }
         })
 
-        const pdf = new jsPDF({
-          orientation: isLandscape ? 'landscape' : 'portrait',
-          unit: 'in',
-          format: [pageW, pageH]
-        })
-
-        const usableW = pageW - margin * 2
-        const usableH = pageH - margin * 2
+        let pdf = null
 
         if (printForm.value.pagination === 'section') {
           // One section per page — capture header + each visible section separately
-          const header = document.querySelector('.timeline-header')
-          const daysRow = document.querySelector('.timeline-days-row')
           const visibleSections = Array.from(sectionGroups).filter(g => g.style.display !== 'none')
 
           for (let i = 0; i < visibleSections.length; i++) {
-            if (i > 0) pdf.addPage([pageW, pageH], isLandscape ? 'landscape' : 'portrait')
-
             // Temporarily hide other sections to capture just this one
             const otherSections = visibleSections.filter((_, idx) => idx !== i)
             otherSections.forEach(s => s.style.display = 'none')
@@ -1519,12 +1509,23 @@ export default {
             // Restore other sections
             otherSections.forEach(s => s.style.display = '')
 
-            // Scale image to fit the page
-            const imgW = canvas.width
-            const imgH = canvas.height
-            const scaleToFit = Math.min(usableW / (imgW / 96 / 2), usableH / (imgH / 96 / 2))
-            const finalW = (imgW / 96 / 2) * scaleToFit
-            const finalH = (imgH / 96 / 2) * scaleToFit
+            // Scale to fill the page HEIGHT — width follows proportionally
+            const imgWInches = canvas.width / 96 / 2
+            const imgHInches = canvas.height / 96 / 2
+            const scale = usableH / imgHInches
+            const finalH = usableH
+            const finalW = imgWInches * scale
+            const pageW = finalW + margin * 2
+
+            if (i === 0) {
+              pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'in',
+                format: [pageW, paperHeight]
+              })
+            } else {
+              pdf.addPage([pageW, paperHeight], 'landscape')
+            }
 
             const imgData = canvas.toDataURL('image/png')
             pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
@@ -1540,28 +1541,22 @@ export default {
             windowWidth: wrapper.scrollWidth + 100
           })
 
-          const imgW = canvas.width
-          const imgH = canvas.height
-          // Scale to fit page width, let height determine number of pages
-          const scaleToFit = usableW / (imgW / 96 / 2)
-          const finalW = usableW
-          const finalH = (imgH / 96 / 2) * scaleToFit
+          // Scale to fill the page HEIGHT
+          const imgWInches = canvas.width / 96 / 2
+          const imgHInches = canvas.height / 96 / 2
+          const scale = usableH / imgHInches
+          const finalH = usableH
+          const finalW = imgWInches * scale
+          const pageW = finalW + margin * 2
+
+          pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'in',
+            format: [pageW, paperHeight]
+          })
 
           const imgData = canvas.toDataURL('image/png')
-
-          if (finalH <= usableH) {
-            // Fits on one page
-            pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
-          } else {
-            // Split across multiple pages
-            const totalPages = Math.ceil(finalH / usableH)
-            for (let p = 0; p < totalPages; p++) {
-              if (p > 0) pdf.addPage([pageW, pageH], isLandscape ? 'landscape' : 'portrait')
-              // Offset the image vertically for each page
-              const yOffset = margin - (p * usableH)
-              pdf.addImage(imgData, 'PNG', margin, yOffset, finalW, finalH)
-            }
-          }
+          pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
         }
 
         // Restore UI elements
