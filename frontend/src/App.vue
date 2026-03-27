@@ -1439,21 +1439,17 @@ export default {
       isExporting.value = true
 
       try {
-        // Hard-coded paper sizes: always [short side, long side] in inches
-        // jsPDF format always takes [short, long], orientation controls layout
-        const paperDefs = {
-          letter:  [8.5, 11],
-          tabloid: [11, 17],
-          archD:   [24, 36]
+        // Fixed paper dimensions in inches [width, height]
+        const paperSizes = {
+          letter:  { portrait: [8.5, 11],  landscape: [11, 8.5] },
+          tabloid: { portrait: [11, 17],   landscape: [17, 11] },
+          archD:   { portrait: [24, 36],   landscape: [36, 24] }
         }
         const isLandscape = printForm.value.orientation === 'landscape'
-        const [shortSide, longSide] = paperDefs[printForm.value.paperSize]
-        // Actual page dimensions after orientation
-        const pageW = isLandscape ? longSide : shortSide   // archD landscape = 36
-        const pageH = isLandscape ? shortSide : longSide   // archD landscape = 24
-        const margin = 0.25
-        const usableW = pageW - margin * 2   // 35.5 for archD landscape
-        const usableH = pageH - margin * 2   // 23.5 for archD landscape
+        const [paperW, paperH] = paperSizes[printForm.value.paperSize][isLandscape ? 'landscape' : 'portrait']
+        const margin = 0.25 // inches
+        const usableW = paperW - margin * 2
+        const usableH = paperH - margin * 2
 
         // Determine which sections to capture
         const selectedNames = printForm.value.printMode === 'selected'
@@ -1488,69 +1484,88 @@ export default {
           }
         })
 
-        // Helper: measure actual content height (no empty space)
-        const measureContentHeight = () => {
-          const wrapperRect = wrapper.getBoundingClientRect()
-          let bottom = 0
-          wrapper.querySelectorAll('.timeline-header, .timeline-days-row, .section-group').forEach(el => {
-            if (el.style.display !== 'none' && el.offsetParent !== null) {
-              const r = el.getBoundingClientRect()
-              bottom = Math.max(bottom, r.bottom - wrapperRect.top)
-            }
-          })
-          return Math.ceil(bottom) + 4
-        }
-
-        // Helper: capture the wrapper to canvas
-        const captureChart = async () => {
-          const h = measureContentHeight()
-          return await html2canvas(wrapper, {
-            scale: 3,
-            useCORS: true,
-            logging: false,
-            width: wrapper.scrollWidth,
-            height: h,
-            windowWidth: wrapper.scrollWidth + 100,
-            scrollX: 0,
-            scrollY: -window.scrollY
-          })
-        }
-
-        // Helper: create PDF page and place image to fill it
-        const createPage = (pdf, canvas, isFirst) => {
-          if (isFirst) {
-            // jsPDF: format = [short, long], orientation flips them
-            pdf = new jsPDF({
-              orientation: isLandscape ? 'l' : 'p',
-              unit: 'in',
-              format: [shortSide, longSide]
-            })
-          } else {
-            pdf.addPage([shortSide, longSide], isLandscape ? 'l' : 'p')
-          }
-          const imgData = canvas.toDataURL('image/png')
-          // Place image filling the entire usable area
-          pdf.addImage(imgData, 'PNG', margin, margin, usableW, usableH)
-          return pdf
-        }
-
         let pdf = null
 
         if (printForm.value.pagination === 'section') {
+          // One section per page — capture header + each visible section separately
           const visibleSections = Array.from(sectionGroups).filter(g => g.style.display !== 'none')
 
           for (let i = 0; i < visibleSections.length; i++) {
+            // Temporarily hide other sections to capture just this one
             const otherSections = visibleSections.filter((_, idx) => idx !== i)
             otherSections.forEach(s => s.style.display = 'none')
 
-            const canvas = await captureChart()
+            // Capture the wrapper (header + days + this section)
+            // Calculate actual content height to avoid capturing empty space
+            const wrapperRect = wrapper.getBoundingClientRect()
+            const allContentEls = wrapper.querySelectorAll('.timeline-header, .timeline-days-row, .section-group')
+            let contentBottom = 0
+            allContentEls.forEach(el => {
+              if (el.style.display !== 'none') {
+                const r = el.getBoundingClientRect()
+                contentBottom = Math.max(contentBottom, r.bottom - wrapperRect.top)
+              }
+            })
+            const captureHeight = Math.ceil(contentBottom) + 2
+
+            const canvas = await html2canvas(wrapper, {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              width: wrapper.scrollWidth,
+              height: captureHeight,
+              windowWidth: wrapper.scrollWidth + 100
+            })
+
+            // Restore other sections
             otherSections.forEach(s => s.style.display = '')
 
-            pdf = createPage(pdf, canvas, i === 0)
+            // Stretch to fill the full page — chart fills entire usable area
+            if (i === 0) {
+              pdf = new jsPDF({
+                orientation: isLandscape ? 'landscape' : 'portrait',
+                unit: 'in',
+                format: [paperW, paperH]
+              })
+            } else {
+              pdf.addPage([paperW, paperH], isLandscape ? 'landscape' : 'portrait')
+            }
+
+            const imgData = canvas.toDataURL('image/png')
+            pdf.addImage(imgData, 'PNG', margin, margin, usableW, usableH)
           }
         } else {
-          const canvas = await captureChart()
-          pdf = createPage(pdf, canvas, true)
+          // Continuous — capture entire visible chart as one image
+          // Calculate actual content height to avoid capturing empty space
+          const wrapperRect = wrapper.getBoundingClientRect()
+          const allContentEls = wrapper.querySelectorAll('.timeline-header, .timeline-days-row, .section-group')
+          let contentBottom = 0
+          allContentEls.forEach(el => {
+            if (el.style.display !== 'none') {
+              const r = el.getBoundingClientRect()
+              contentBottom = Math.max(contentBottom, r.bottom - wrapperRect.top)
+            }
+          })
+          const captureHeight = Math.ceil(contentBottom) + 2
+
+          const canvas = await html2canvas(wrapper, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: wrapper.scrollWidth,
+            height: captureHeight,
+            windowWidth: wrapper.scrollWidth + 100
+          })
+
+          // Stretch to fill the full page — chart fills entire usable area
+          pdf = new jsPDF({
+            orientation: isLandscape ? 'landscape' : 'portrait',
+            unit: 'in',
+            format: [paperW, paperH]
+          })
+
+          const imgData = canvas.toDataURL('image/png')
+          pdf.addImage(imgData, 'PNG', margin, margin, usableW, usableH)
         }
 
         // Restore UI elements
@@ -1559,7 +1574,7 @@ export default {
         if (controlsPanel) controlsPanel.style.display = ''
         if (projectFilter) projectFilter.style.display = ''
 
-        // Save
+        // Save the PDF
         const timestamp = dayjs().format('YYYY-MM-DD_HHmm')
         const paperLabel = printForm.value.paperSize === 'archD' ? '24x36' : printForm.value.paperSize === 'tabloid' ? '11x17' : '8.5x11'
         pdf.save(`Gantt_Schedule_${paperLabel}_${timestamp}.pdf`)
