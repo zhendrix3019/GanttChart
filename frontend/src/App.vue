@@ -1613,6 +1613,16 @@ export default {
         `
       }
 
+      // Determine the print size class
+      let printSizeClass = '';
+      if (printForm.value.paperSize === 'letter') {
+        printSizeClass = 'print-letter';
+      } else if (printForm.value.paperSize === 'tabloid') {
+        printSizeClass = 'print-11x17';
+      } else if (printForm.value.paperSize === 'archD') {
+        printSizeClass = 'print-arch-d';
+      }
+
       const printStyle = document.createElement('style')
       printStyle.id = 'dynamic-print-style'
       printStyle.textContent = `
@@ -1621,6 +1631,12 @@ export default {
         ${paginationCSS}
       `
       document.head.appendChild(printStyle)
+
+      // Add the print size class to the gantt-chart-wrapper
+      const ganttWrapper = document.querySelector('.gantt-chart-wrapper');
+      if (ganttWrapper && printSizeClass) {
+        ganttWrapper.classList.add(printSizeClass);
+      }
 
       closePrintModal()
 
@@ -1632,6 +1648,10 @@ export default {
           document.querySelectorAll('[data-print-hide]').forEach(el => {
             el.removeAttribute('data-print-hide')
           })
+          // Remove the print size class
+          if (ganttWrapper && printSizeClass) {
+            ganttWrapper.classList.remove(printSizeClass);
+          }
         }
         if (window.onafterprint !== undefined) {
           window.addEventListener('afterprint', cleanup, { once: true })
