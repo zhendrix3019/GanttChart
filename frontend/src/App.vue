@@ -376,16 +376,25 @@
               <label><input type="radio" v-model="printForm.pagination" value="section"> One Section Per Page</label>
               <label><input type="radio" v-model="printForm.pagination" value="none"> Continuous (all on one page)</label>
             </div>
-            <label>Paper Size (for PDF export):</label>
+            <label>Paper Size:</label>
             <select v-model="printForm.paperSize">
-              <option value="archD">24" x 36" (Arch D)</option>
-              <option value="tabloid">11" x 17" (Tabloid)</option>
-              <option value="letter">8.5" x 11" (Letter)</option>
+              <option value="archD">24" x 36" (Arch D / Engineering)</option>
+              <option value="tabloid">11" x 17" (Tabloid / Half-size)</option>
+              <option value="letter">8.5" x 11" (Letter / Standard)</option>
             </select>
             <label>Orientation:</label>
             <div class="checkbox-group horizontal">
               <label><input type="radio" v-model="printForm.orientation" value="landscape"> Landscape</label>
               <label><input type="radio" v-model="printForm.orientation" value="portrait"> Portrait</label>
+            </div>
+            <label>Advanced Options:</label>
+            <div class="checkbox-group">
+              <label title="Automatically scales the chart to fill the paper size as much as possible">
+                <input type="checkbox" v-model="printForm.autoFit"> Auto-fit to Page (Scale to Fill)
+              </label>
+              <label title="When printing one section per page, crops each page to only show the dates for that section's activities">
+                <input type="checkbox" v-model="printForm.autoCrop"> Independent Section Date Ranges (Auto-crop)
+              </label>
             </div>
             <label>Print Date Range:</label>
             <div class="checkbox-group horizontal">
@@ -398,6 +407,26 @@
               <label>End Date:</label>
               <input type="date" v-model="printForm.endDate">
             </div>
+            
+            <details class="print-tips">
+              <summary>Printing & Scaling Tips</summary>
+              <div class="tips-content">
+                <p><strong>Option 1: Adjust print scaling</strong></p>
+                <ol>
+                  <li>Open PDF in Adobe Acrobat or PDF viewer.</li>
+                  <li>Go to File &rarr; Print.</li>
+                  <li>Under Page Sizing &amp; Handling choose <em>Fit</em> or <em>Shrink oversized pages</em>.</li>
+                  <li>If still too small try <em>Poster mode</em> in Acrobat to split chart across pages.</li>
+                </ol>
+                <p><strong>Option 2: Change orientation</strong></p>
+                <p>Select <em>Orientation &rarr; Landscape</em> in print dialog for horizontal space.</p>
+                <p><strong>Option 3: Resize before exporting</strong></p>
+                <p>If created in Excel or Project adjust zoom or page breaks. In Excel use <em>Page Layout &rarr; Scale to fit &rarr; Width = 1 page, Height = Automatic</em> then export PDF.</p>
+                <p><strong>Option 4: Use a larger paper size</strong></p>
+                <p>Switch to 11&times;17 (tabloid) or A3 for full timeline without shrinking text.</p>
+                <p><strong>Quick fix:</strong> Print in Landscape orientation and select <em>Fit to page</em> scaling.</p>
+              </div>
+            </details>
           </div>
         </div>
         <div class="modal-footer" style="flex-direction: column; gap: 8px;">
@@ -509,8 +538,10 @@ export default {
       paperSize: 'archD',        // 'archD' = 24x36, 'tabloid' = 11x17, 'letter' = 8.5x11
       orientation: 'landscape',   // 'landscape' or 'portrait'
       dateRangeMode: 'all',      // 'all' or 'custom'
-      startDate: dayjs().format('YYYY-MM-DD'), // Default to current chart start
-      endDate: dayjs().add(3, 'month').format('YYYY-MM-DD') // Default to current chart end
+      startDate: dayjs().format('YYYY-MM-DD'),
+      endDate: dayjs().add(3, 'month').format('YYYY-MM-DD'),
+      autoFit: true,             // Auto-fit to fill page horizontally/vertically
+      autoCrop: false            // Independent section date ranges
     })
     const isExporting = ref(false)
     const printModalPosition = ref({ x: null, y: null })
@@ -1545,11 +1576,11 @@ export default {
             const sectionName = currentSectionEl.querySelector('.section-title-text')?.textContent.trim()
             const sectionData = allSections.value.find(s => s.name === sectionName)
 
-            // Calculate independent date range for this section
+            // Calculate date range for this section
             let sectionMinDate = effectiveStartDate;
             let sectionMaxDate = effectiveEndDate;
 
-            if (sectionData) {
+            if (printForm.value.autoCrop && sectionData) {
               const taskDates = []
               sectionData.rows.forEach(row => {
                 row.tasks.forEach(task => {
@@ -1601,7 +1632,17 @@ export default {
             // Scale image to fit the page
             const imgW = canvas.width
             const imgH = canvas.height
-            const scaleToFit = Math.min(usableW / (imgW / DPI / 2), usableH / (imgH / DPI / 2))
+            
+            const scaleW = usableW / (imgW / DPI / 2)
+            const scaleH = usableH / (imgH / DPI / 2)
+            
+            let scaleToFit = 1;
+            if (printForm.value.autoFit) {
+              scaleToFit = Math.min(scaleW, scaleH);
+            } else {
+              scaleToFit = Math.min(1, scaleW); // Only scale down if too wide
+            }
+
             const finalW = (imgW / DPI / 2) * scaleToFit
             const finalH = (imgH / DPI / 2) * scaleToFit
 
@@ -1628,8 +1669,18 @@ export default {
 
           const imgW = canvas.width
           const imgH = canvas.height
-          const scaleToFit = usableW / (imgW / DPI / 2)
-          const finalW = usableW
+          
+          const scaleW = usableW / (imgW / DPI / 2)
+          const scaleH = usableH / (imgH / DPI / 2)
+          
+          let scaleToFit = 1;
+          if (printForm.value.autoFit) {
+            scaleToFit = Math.min(scaleW, scaleH);
+          } else {
+            scaleToFit = Math.min(1, scaleW);
+          }
+
+          const finalW = (imgW / DPI / 2) * scaleToFit
           const finalH = (imgH / DPI / 2) * scaleToFit
 
           const imgData = canvas.toDataURL('image/png')
@@ -1713,15 +1764,60 @@ export default {
         pageSizeStr = `${pageW}in ${pageH}in`;
       }
 
+      const cornerCellWidth = document.querySelector('.corner-cell')?.offsetWidth || 40;
       const usablePageWidth = (pageW - 2 * marginInches) * DPI;
+      const usablePageHeight = (pageH - 2 * marginInches) * DPI;
       const ganttWrapper = document.querySelector('.gantt-chart-wrapper');
       let scaleFactor = 1;
       
       if (ganttWrapper) {
-        const contentWidth = ganttWrapper.scrollWidth;
-        if (contentWidth > usablePageWidth) {
-          scaleFactor = usablePageWidth / contentWidth;
+        let contentWidth = ganttWrapper.scrollWidth;
+        let contentHeight = ganttWrapper.scrollHeight;
+
+        if (printForm.value.dateRangeMode === 'custom') {
+          const startDay = dayjs(printForm.value.startDate);
+          const endDay = dayjs(printForm.value.endDate);
+          const durationDays = endDay.diff(startDay, 'day') + 1;
+          contentWidth = (durationDays * dayWidth.value) + cornerCellWidth;
         }
+        
+        const scaleW = usablePageWidth / contentWidth;
+        const scaleH = usablePageHeight / contentHeight;
+        
+        if (printForm.value.autoFit) {
+          // Fill page as much as possible
+          scaleFactor = Math.min(scaleW, scaleH);
+        } else if (contentWidth > usablePageWidth) {
+          // Standard: only scale down to fit width
+          scaleFactor = scaleW;
+        }
+      }
+
+      // Handle custom date range for direct print
+      let dateFilterCSS = '';
+      if (printForm.value.dateRangeMode === 'custom') {
+        const startDay = dayjs(printForm.value.startDate);
+        const endDay = dayjs(printForm.value.endDate);
+        
+        const startOffsetDays = startDay.diff(startDate.value, 'day');
+        const durationDays = endDay.diff(startDay, 'day') + 1;
+        const captureX = (startOffsetDays * dayWidth.value);
+        const captureWidth = (durationDays * dayWidth.value);
+        
+        dateFilterCSS = `
+          .timeline-months, .timeline-days, .gantt-body {
+            transform: translateX(-${captureX}px);
+            width: ${captureWidth}px !important;
+          }
+          .gantt-chart-wrapper {
+            width: ${captureWidth + cornerCellWidth}px !important;
+            overflow: hidden !important;
+          }
+          .corner-cell, .section-header {
+            transform: translateX(${captureX}px);
+            z-index: 100 !important;
+          }
+        `;
       }
 
       const printStyle = document.createElement('style')
@@ -1750,6 +1846,7 @@ export default {
           }
           .section-group[data-print-hide="true"] { display: none !important; }
           ${paginationCSS}
+          ${dateFilterCSS}
           .print-scale-container {
             transform: scale(${scaleFactor});
             transform-origin: top left;
@@ -2021,64 +2118,56 @@ export default {
         allSections.value = Object.keys(grouped).map((name, index) => {
           const sectionTasks = grouped[name]
 
-          // Group tasks by row_index, null row_index gets its own row
+          // Group tasks by explicit row_index first
           const rowGroups = {}
-          let nextAutoRow = 1
+          const unassignedTasks = []
 
           sectionTasks.forEach(task => {
-            const rowIdx = task.row_index || `auto_${nextAutoRow++}`
-            if (!rowGroups[rowIdx]) {
-              rowGroups[rowIdx] = []
-            }
-            rowGroups[rowIdx].push(task)
-          })
-
-          // Convert to array of rows with multiple tasks
-          // Sort rows: numeric row_index first (in order), then auto rows
-          const sortedEntries = Object.entries(rowGroups).sort(([a], [b]) => {
-            const aIsAuto = String(a).startsWith('auto_')
-            const bIsAuto = String(b).startsWith('auto_')
-            if (aIsAuto && bIsAuto) return 0
-            if (aIsAuto) return 1
-            if (bIsAuto) return -1
-            return parseInt(a) - parseInt(b)
-          })
-
-          // Track the next available row number for auto rows
-          let maxExplicitRow = 0
-          sortedEntries.forEach(([rowIdx]) => {
-            if (!String(rowIdx).startsWith('auto_')) {
-              maxExplicitRow = Math.max(maxExplicitRow, parseInt(rowIdx))
+            if (task.row_index && !isNaN(parseInt(task.row_index))) {
+              const rowIdx = parseInt(task.row_index)
+              if (!rowGroups[rowIdx]) rowGroups[rowIdx] = []
+              rowGroups[rowIdx].push(task)
+            } else {
+              unassignedTasks.push(task)
             }
           })
 
-          // Create all 20 rows, placing tasks in their assigned rows
+          // Create all 20 rows, placing assigned tasks
           const rows = []
           for (let i = 1; i <= 20; i++) {
-            const tasksForRow = rowGroups[i] || []
             rows.push({
               rowNumber: i,
               rowIndex: i,
-              tasks: tasksForRow
+              tasks: rowGroups[i] || []
             })
           }
 
-          // Add any auto-assigned tasks to rows after 20 or to empty slots
-          let autoRowNum = 21
-          sortedEntries.forEach(([rowIdx, rowTasks]) => {
-            if (String(rowIdx).startsWith('auto_')) {
-              // Find first empty row or add after 20
-              let targetRow = rows.find(r => r.tasks.length === 0)
-              if (targetRow) {
-                targetRow.tasks = rowTasks
-              } else {
-                rows.push({
-                  rowNumber: autoRowNum,
-                  rowIndex: `auto_${autoRowNum}`,
-                  tasks: rowTasks
-                })
-                autoRowNum++
-              }
+          // Distribute unassigned tasks to rows where they don't overlap
+          unassignedTasks.forEach(task => {
+            const taskStart = dayjs(task.start_date)
+            const taskEnd = dayjs(task.end_date)
+
+            // Find first row (including rows after 20) where it doesn't overlap
+            let targetRow = rows.find(row => {
+              return !row.tasks.some(existingTask => {
+                const existingStart = dayjs(existingTask.start_date)
+                const existingEnd = dayjs(existingTask.end_date)
+                // Overlap: max(start1, start2) <= min(end1, end2)
+                // We add 1 day padding to avoid items touching
+                return taskStart.isBefore(existingEnd.add(1, 'day')) && existingStart.isBefore(taskEnd.add(1, 'day'))
+              })
+            })
+
+            if (targetRow) {
+              targetRow.tasks.push(task)
+            } else {
+              // Add a new row
+              const newRowNum = rows.length + 1
+              rows.push({
+                rowNumber: newRowNum,
+                rowIndex: `auto_${newRowNum}`,
+                tasks: [task]
+              })
             }
           })
 

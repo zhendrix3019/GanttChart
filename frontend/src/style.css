@@ -455,16 +455,23 @@ body {
 .controls-panel {
   display: flex;
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: 0;
+  right: 40px;
   background: white;
   border: 2px solid #333;
-  border-radius: 8px;
-  padding: 15px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  flex-direction: column;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 10px 15px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  flex-direction: row;
   gap: 10px;
   z-index: 100;
+}
+
+@media print {
+  .controls-panel, .project-filter, .no-print {
+    display: none !important;
+  }
 }
 
 .control-btn {
@@ -1211,4 +1218,64 @@ html.dark-mode .print-section-list {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+.print-tips {
+  margin-top: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+.print-tips summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #2196F3;
+  outline: none;
+  user-select: none;
+}
+
+.print-tips summary:hover {
+  background: #f0f7ff;
+}
+
+.tips-content {
+  padding: 10px 15px;
+  font-size: 12px;
+  color: #555;
+  border-top: 1px solid #ddd;
+  line-height: 1.5;
+}
+
+.tips-content p {
+  margin: 8px 0;
+}
+
+.tips-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.tips-content li {
+  margin: 4px 0;
+}
+
+html.dark-mode .print-tips {
+  background: #16213e;
+  border-color: #333;
+}
+
+html.dark-mode .print-tips summary {
+  color: #4facfe;
+}
+
+html.dark-mode .print-tips summary:hover {
+  background: #1a2a4a;
+}
+
+html.dark-mode .tips-content {
+  color: #ccc;
+  border-top-color: #333;
 }
