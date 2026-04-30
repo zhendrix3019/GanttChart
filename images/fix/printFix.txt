@@ -1,0 +1,213 @@
+function printDrawing() {
+    // Optional: Add a class to the body if you need 
+    // to swap between 100% scale and half-scale dynamically
+    // document.body.classList.add('scale-tabloid'); 
+
+    window.print();
+}
+
+Skip to main contentAccessibility help
+Accessibility feedback
+AI Mode
+All
+Images
+Videos
+News
+More
+
+
+
+Stack overflow. arch d and 11x17
+April 26, 2026
+When scaling a 24" x 36" Arch D drawing down to a tabloid 11" x 17" page, you are reducing the drawing exactly in half. Since the aspect ratios match (both are 
+
+
+ or 
+
+
+), the drawing fits perfectly without cropping.
+To achieve this during printing, scale to 50% or select "Fit to Page" in your print/plot settings.
+To help me give you the exact steps, please tell me:
+What software are you printing or exporting from (e.g., AutoCAD, Revit, Adobe Acrobat, Bluebeam)?
+Are you printing to a physical printer, or exporting to a PDF?
+
+
+
+
+
+I would prefer to export a PDF, but it is physically printed at those three resolutions 8 x 11 11 x 17 and 24 x 36
+April 26, 2026
+To ensure your drawings remain clear across all three physical print sizes, export your PDF at the full 24" x 36" (Arch D) size first. This preserves the highest resolution and allows the printer software to scale down accurately for the smaller sheets. 
+YouTube
+YouTube
+ +3
+1. Exporting the Master PDF (24" x 36")
+Set the Layout: In your design software (like AutoCAD or Revit), ensure your layout or page setup is explicitly set to Arch D (24" x 36").
+Scale at 1:1: Export the PDF at 100% scale (Actual Size). This creates a "master" file where 
+
+
+
+
+
+
+ (or your chosen scale) is mathematically correct. 
+YouTube
+YouTube
+ +3
+2. Physical Printing from the PDF
+When you open that master 24" x 36" PDF to print physically, use these settings in Adobe Acrobat or your PDF viewer: 
+For 24" x 36" (Full Size):
+Paper Size: Select "Arch D" or "24 x 36".
+Scaling: Select "Actual Size" or "100%" to maintain the engineering scale.
+For 11" x 17" (Half Size):
+Paper Size: Select "Tabloid" or "11 x 17".
+Scaling: Select "Fit" or "Shrink Oversized Pages". This automatically scales the drawing to ~47-50%.
+Note: Standard text at 3/32" will still be legible at this size (approx. 3/64").
+For 8.5" x 11" (Quarter Size):
+Paper Size: Select "Letter" or "8.5 x 11".
+Scaling: Select "Fit".
+Note: Use this for reference only; most architectural text and fine details become difficult to read at this resolution. 
+Reddit
+Reddit
+ +6
+Recommended Tools
+PDF Viewers: Adobe Acrobat Reader is standard for handling these scaling transitions.
+Measurement: If you need to verify scales on the smaller prints, use Bluebeam Revu or PDF-XChange Editor to "calibrate" the digital file. 
+YouTube
+YouTube
+ +3
+Would you like to know the specific minimum text heights or line weights recommended to keep the 8.5" x 11" prints readable?
+
+
+
+
+
+
+
+
+
+13 sites
+What are your thoughts on text sizes in your CAD drawings? - Reddit
+I mean, text size factors into so much - dim styles, mleader styles, mtext ... For me - when I was doing work on large format Arch...
+
+
+Reddit
+How to Setup Paper Sizes (Layout) in Autocad | Autocad LT 2021 Tutorial
+To choose a paper size for a drawing or project in AutoCAD, one needs to go to the layout. A new layout can be created by clicking...
+
+4m
+
+YouTube
+·
+Jay Cad - As Built & Drafting Service
+Is there an automatic way to convert 36x24 to 11x17?
+Alan Lehman. If you have enough border on you sheets, you can print at 50%. My smaller printer can print up to 13x19 so I have 12x...
+
+0:29
+
+Facebook
+·
+James Scotty Smith
+Show all
+I need the specific code it was built I believe with mostly JavaScript with a very simple HTML front end maybe view maybe not but the current issue is being able to print at the correct scale and have it correct
+April 26, 2026
+1. The CSS (Print Logic)
+This code sets up a standard Arch D container. When you print, the browser will see these dimensions and attempt to fit them to the selected paper. 
+Stack Overflow
+Stack Overflow
+ +1
+css
+/* Print-specific styles */
+@media print {
+    /* Hide UI elements like buttons or navbars */
+    .no-print { display: none !important; }
+
+    /* Set the physical page size to Arch D */
+    @page {
+        size: 36in 24in; /* Arch D landscape */
+        margin: 0;      /* Remove browser headers/footers */
+    }
+
+    body, .print-container {
+        width: 36in;
+        height: 24in;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        /* Ensure high-resolution rendering */
+        -webkit-print-color-adjust: exact;
+    }
+
+    /* Optional: If content needs to scale down for smaller sheets without 
+       changing the container size, you can use a scale transform. */
+    .scale-tabloid {
+        transform: scale(0.47); /* Roughly 50% for 11x17 */
+        transform-origin: top left;
+    }
+}
+Use code with caution.
+2. The JavaScript (Triggering Print)
+Use a simple JavaScript function to trigger the browser's print dialog. For complex layouts, it is often better to open a new "print window" with just the drawing content. 
+YouTube
+YouTube
+javascript
+function printDrawing() {
+    // Optional: Add a class to the body if you need 
+    // to swap between 100% scale and half-scale dynamically
+    // document.body.classList.add('scale-tabloid'); 
+
+    window.print();
+}
+Use code with caution.
+3. Key Implementation Details
+Vector Content: For architectural drawings, use SVG or HTML5 Canvas instead of standard images. SVGs are vector-based and will print sharply at any resolution (24x36 or 11x17) without pixelation.
+Handling the 50% Scale (11" x 17"): An Arch D sheet (24x36) is exactly twice the size of a tabloid sheet (11x17) in terms of aspect ratio. If you print your 24x36 master PDF or web page and select "Fit to Page" in the browser's print dialog, it will scale perfectly to 11x17 without you needing extra code.
+Resolution: Ensure your CSS pixels are mapped correctly. At 96 DPI (standard for CSS), a 24" x 36" sheet is 2304px x 3456px. 
+Autodesk Community, Autodesk Forums, Autodesk Forum
+Autodesk Community, Autodesk Forums, Autodesk Forum
+ +2
+Would you like me to show you how to generate a PDF directly in the browser using a library like jsPDF to lock in these dimensions?
+
+
+
+
+
+
+
+
+
+6 sites
+Getting a 36x24 sheet to an 11x17 to scale without multiple layouts...
+Message 2 of 25. Neilw_05. Mentor. ‎01-08-2015 06:47 AM. You can do it with one layout. Either set up an 11x17 layout and plot it ...
+
+Autodesk Community, Autodesk Forums, Autodesk Forum
+How can i print html page at 300 dpi resolution - Stack Overflow
+* 5 Answers. Sorted by: You can use CSS just like: @media print { @page { size: 210mm 297mm; } } or with px: @media print { @page ...
+
+Stack Overflow
+How to print a Web Page with CSS and Javascript
+To print a web page using JavaScript, one can add a button that triggers a JavaScript function. This function can create a hidden ...
+
+7m
+
+YouTube
+·
+Marco Lancellotti
+Show all
+To ensure your JavaScript/HTML application prints at the correct scale for Arch D (24" x 36"), Tabloid (11" x 17"), and Letter (8.5" x 11"), the key is to use CSS @media print and @page rules. JavaScript alone cannot control the printer's physical hardware settings, so you must define the "canvas" size in CSS to match the paper dimensions. 
+remove all spaace in this with commas and make each new step its own line To ensure your JavaScript/HTML application prints at the correct scale for Arch D (24" x 36"), Tabloid (11" x 17"), and Letter (8.5" x 11"), the key is to use [CSS @media print](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries/Printing) and [@page](https://developer.mozilla.org/en-US/docs/Web/CSS/@page) rules. JavaScript alone cannot control the printer's physical hardware settings, so you must define the "canvas" size in CSS to match the paper dimensions. [1] ## 1. The CSS (Print Logic) This code sets up a standard Arch D container. When you print, the browser will see these dimensions and attempt to fit them to the selected paper. [2, 3] /* Print-specific styles */@media print { /* Hide UI elements like buttons or navbars */ .no-print { display: none !important; } /* Set the physical page size to Arch D */ @page { size: 36in 24in; /* Arch D landscape */ margin: 0; /* Remove browser headers/footers */ } body, .print-container { width: 36in; height: 24in; margin: 0; padding: 0; overflow: hidden; /* Ensure high-resolution rendering */ -webkit-print-color-adjust: exact; } /* Optional: If content needs to scale down for smaller sheets without changing the container size, you can use a scale transform. */ .scale-tabloid { transform: scale(0.47); /* Roughly 50% for 11x17 */ transform-origin: top left; } } ## 2. The JavaScript (Triggering Print) Use a simple [JavaScript function](https://developer.mozilla.org/en-US/docs/Web/API/Window/print) to trigger the browser's print dialog. For complex layouts, it is often better to open a new "print window" with just the drawing content. [4] function printDrawing() { // Optional: Add a class to the body if you need // to swap between 100% scale and half-scale dynamically // document.body.classList.add('scale-tabloid'); window.print(); } ## 3. Key Implementation Details * Vector Content: For architectural drawings, use SVG or HTML5 Canvas instead of standard images. SVGs are vector-based and will print sharply at any resolution (24x36 or 11x17) without pixelation. * Handling the 50% Scale (11" x 17"): An Arch D sheet (24x36) is exactly twice the size of a tabloid sheet (11x17) in terms of aspect ratio. If you print your 24x36 master PDF or web page and select "Fit to Page" in the browser's print dialog, it will scale perfectly to 11x17 without you needing extra code. * Resolution: Ensure your [CSS pixels](https://stackoverflow.com/questions/22885854/how-can-i-print-html-page-at-300-dpi-resolution) are mapped correctly. At 96 DPI (standard for CSS), a 24" x 36" sheet is 2304px x 3456px. [2, 5, 6] Would you like me to show you how to generate a PDF directly in the browser using a library like jsPDF to lock in these dimensions? [1] [https://www.scribd.com](https://www.scribd.com/document/372272570/Javascript-Print-Set-Paper-Size) [2] [https://stackoverflow.com](https://stackoverflow.com/questions/22885854/how-can-i-print-html-page-at-300-dpi-resolution) [3] [https://stackoverflow.com](https://stackoverflow.com/questions/46076964/svg-for-print-with-scale) [4] [https://www.youtube.com](https://www.youtube.com/watch?v=4bxeHjGW048&t=1) [5] [https://forums.autodesk.com](https://forums.autodesk.com/t5/civil-3d-forum/getting-a-36x24-sheet-to-an-11x17-to-scale-without-multiple/td-p/5462495) [6] [https://www.quora.com](https://www.quora.com/How-do-you-scale-a-webpage-when-printing-using-CSS)
+To,ensure,your,JavaScript/HTML,application,prints,at,the,correct,scale,for,Arch,D,(24",x,36"),Tabloid,(11",x,17"),and,Letter,(8.5",x,11"),the,key,is,to,use,CSS,@media,print,and,@page,rules.,JavaScript,alone,cannot,control,the,printer's,physical,hardware,settings,so,you,must,define,the,"canvas",size,in,CSS,to,match,the,paper,dimensions.
+##,1.,The,CSS,(Print,Logic),This,code,sets,up,a,standard,Arch,D,container.,When,you,print,the,browser,will,see,these,dimensions,and,attempt,to,fit,them,to,the,selected,paper.
+/,Print-specific,styles,/@media,print,{,/,Hide,UI,elements,like,buttons,or,navbars,/,.no-print,{,display:,none,!important;,},/,Set,the,physical,page,size,to,Arch,D,/,@page,{,size:,36in,24in;,/,Arch,D,landscape,/,margin:,0;,/,Remove,browser,headers/footers,/,},body,,.print-container,{,width:,36in;,height:,24in;,margin:,0;,padding:,0;,overflow:,hidden;,/,Ensure,high-resolution,rendering,/,-webkit-print-color-adjust:,exact;,},/,Optional:,If,content,needs,to,scale,down,for,smaller,sheets,without,changing,the,container,size,you,can,use,a,scale,transform.,/,.scale-tabloid,{,transform:,scale(0.47);,/,Roughly,50%,for,11x17,/,transform-origin:,top,left;,},},
+##,2.,The,JavaScript,(Triggering,Print),Use,a,simple,JavaScript,function,to,trigger,the,browser's,print,dialog.,For,complex,layouts,it,is,often,better,to,open,a,new,"print,window",with,just,the,drawing,content.
+function,printDrawing(),{,//,Optional:,Add,a,class,to,the,body,if,you,need,//,to,swap,between,100%,scale,and,half-scale,dynamically,//,document.body.classList.add('scale-tabloid');,window.print();,}
+##,3.,Key,Implementation,Details,*,Vector,Content:,For,architectural,drawings,use,SVG,or,HTML5,Canvas,instead,of,standard,images.,SVGs,are,vector-based,and,will,print,sharply,at,any,resolution,(24x36,or,11x17),without,pixelation.
+*,Handling,the,50%,Scale,(11",x,17"):,An,Arch,D,sheet,(24x36),is,exactly,twice,the,size,of,a,tabloid,sheet,(11x17),in,terms,of,aspect,ratio.,If,you,print,your,24x36,master,PDF,or,web,page,and,select,"Fit,to,Page",in,the,browser's,print,dialog,it,will,scale,perfectly,to,11x17,without,you,needing,extra,code.
+*,Resolution:,Ensure,your,CSS,pixels,are,mapped,correctly.,At,96,DPI,(standard,for,CSS),a,24",x,36",sheet,is,2304px,x,3456px.
+Do you need a ready-to-use HTML file with this logic integrated for testing?
+
+
+
+
+
+AI Mode response is readyAsk about 

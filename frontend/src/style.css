@@ -1157,53 +1157,26 @@ html.dark-mode .print-section-list {
     display: none !important;
   }
 
-  /* Default page size for all pages */
-  @page {
-    size: 8.5in 11in; /* Default to Letter size */
-    margin: 0.5in;
-  }
-
-  /* Custom page size for 11x17 inches */
-  @page size-11x17 {
-    size: 11in 17in;
-    margin: 0.5in;
-  }
-
-  /* Custom page size for Arch D (24x36 inches) */
-  @page size-arch-d {
-    size: 24in 36in;
-    margin: 0.5in;
-  }
-
-  /* Apply page sizes based on classes */
-  .print-11x17 {
-    page: size-11x17;
-  }
-
-  .print-arch-d {
-    page: size-arch-d;
-  }
-
   html, body {
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: visible !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    width: auto !important;
-    height: auto !important;
+    background: white !important;
   }
 
   #app {
     overflow: visible !important;
-    width: auto !important;
+    width: 100% !important;
   }
 
   .gantt-container {
     overflow: visible !important;
-    margin: 0;
-    padding: 0;
-    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: white !important;
   }
 
   .gantt-chart-wrapper {
@@ -1211,60 +1184,29 @@ html.dark-mode .print-section-list {
     overflow: visible !important;
     min-width: unset !important;
     max-width: none !important;
+    background: white !important;
   }
 
   .timeline-header,
-  .timeline-days-row {
-    overflow: visible !important;
-  }
-
+  .timeline-days-row,
+  .gantt-body,
   .timeline-months,
   .timeline-days,
   .timeline-area {
     overflow: visible !important;
   }
 
-  .gantt-body {
-    overflow: visible !important;
-  }
-
-  /* Prevent page-break inside a section row */
+  /* Prevent page-break inside a task row */
   .task-row {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Repeat timeline header on each page */
-  .timeline-header,
-  .timeline-days-row {
-    position: static !important;
-  }
-
-  .task-bar {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .milestone svg polygon {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .day-cell.weekend {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .month-header {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .text-item {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
+  .task-bar,
+  .milestone svg polygon,
+  .day-cell.weekend,
+  .month-header,
+  .text-item,
   .section-header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

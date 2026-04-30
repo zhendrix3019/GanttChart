@@ -129,7 +129,6 @@
         <button @click="createTimeline" class="control-btn">Create Timeline</button>
         <button @click="addTextLine" class="control-btn">Add Text</button>
         <button @click="openPrintModal" class="control-btn" style="background: #2196F3;">Print / Export PDF</button>
-        <button @click="openPrintModal" class="control-btn" style="background: #2196F3;">Print / Export PDF</button>
       </div>
     </div>
 
@@ -1452,6 +1451,7 @@ export default {
 
     const exportPDF = async () => {
       isExporting.value = true
+      const DPI = 96;
 
       try {
         // Paper sizes in inches
@@ -1491,8 +1491,6 @@ export default {
 
         // Calculate the x-offset and width for html2canvas capture
         const ganttWrapper = document.querySelector('.gantt-chart-wrapper');
-        const timelineHeader = document.querySelector('.timeline-header');
-        const timelineDaysRow = document.querySelector('.timeline-days-row');
         const cornerCellWidth = document.querySelector('.corner-cell')?.offsetWidth || 0;
 
         // Calculate the pixel offset from the chart's overall start date to the effective start date
@@ -1541,8 +1539,6 @@ export default {
 
         if (printForm.value.pagination === 'section') {
           // One section per page — capture header + each visible section separately
-          const header = document.querySelector('.timeline-header')
-          const daysRow = document.querySelector('.timeline-days-row')
           const visibleSections = Array.from(sectionGroups).filter(g => g.style.display !== 'none')
 
           for (let i = 0; i < visibleSections.length; i++) {
@@ -1553,16 +1549,15 @@ export default {
             otherSections.forEach(s => s.style.display = 'none')
 
             // Capture the wrapper (header + days + this section)
-            // Adjust html2canvas capture area based on calculated x and width
             const canvas = await html2canvas(ganttWrapper, {
               scale: 2,
               useCORS: true,
               logging: false,
               x: captureX,
-              y: 0, // Capture from the top of the wrapper
+              y: 0,
               width: captureWidth,
-              height: ganttWrapper.scrollHeight, // Capture full height
-              windowWidth: ganttWrapper.scrollWidth + 100 // Ensure full content is available for capture
+              height: ganttWrapper.scrollHeight,
+              windowWidth: ganttWrapper.scrollWidth + 100
             })
 
             // Restore other sections
@@ -1571,7 +1566,7 @@ export default {
             // Scale image to fit the page
             const imgW = canvas.width
             const imgH = canvas.height
-            const scaleToFit = Math.min(usableW / (imgW / DPI / 2), usableH / (imgH / DPI / 2)) // Use DPI for conversion
+            const scaleToFit = Math.min(usableW / (imgW / DPI / 2), usableH / (imgH / DPI / 2))
             const finalW = (imgW / DPI / 2) * scaleToFit
             const finalH = (imgH / DPI / 2) * scaleToFit
 
@@ -1585,30 +1580,26 @@ export default {
             useCORS: true,
             logging: false,
             x: captureX,
-            y: 0, // Capture from the top of the wrapper
+            y: 0,
             width: captureWidth,
-            height: ganttWrapper.scrollHeight, // Capture full height
-            windowWidth: ganttWrapper.scrollWidth + 100 // Ensure full content is available for capture
+            height: ganttWrapper.scrollHeight,
+            windowWidth: ganttWrapper.scrollWidth + 100
           })
 
           const imgW = canvas.width
           const imgH = canvas.height
-          // Scale to fit page width, let height determine number of pages
-          const scaleToFit = usableW / (imgW / DPI / 2) // Use DPI for conversion
+          const scaleToFit = usableW / (imgW / DPI / 2)
           const finalW = usableW
           const finalH = (imgH / DPI / 2) * scaleToFit
 
           const imgData = canvas.toDataURL('image/png')
 
           if (finalH <= usableH) {
-            // Fits on one page
             pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
           } else {
-            // Split across multiple pages
             const totalPages = Math.ceil(finalH / usableH)
             for (let p = 0; p < totalPages; p++) {
               if (p > 0) pdf.addPage([pageW, pageH], isLandscape ? 'landscape' : 'portrait')
-              // Offset the image vertically for each page
               const yOffset = margin - (p * usableH)
               pdf.addImage(imgData, 'PNG', margin, yOffset, finalW, finalH)
             }
@@ -1621,7 +1612,6 @@ export default {
         if (controlsPanel) controlsPanel.style.display = ''
         if (projectFilter) projectFilter.style.display = ''
 
-        // Save the PDF
         const timestamp = dayjs().format('YYYY-MM-DD_HHmm')
         const paperLabel = printForm.value.paperSize === 'archD' ? '24x36' : printForm.value.paperSize === 'tabloid' ? '11x17' : '8.5x11'
         pdf.save(`Gantt_Schedule_${paperLabel}_${timestamp}.pdf`)
@@ -1636,7 +1626,6 @@ export default {
     }
 
     const directPrint = () => {
-      // Hide unselected sections
       const selectedNames = printForm.value.printMode === 'selected'
         ? printForm.value.selectedSections
         : sections.value.map(s => s.name)
@@ -1649,7 +1638,6 @@ export default {
         }
       })
 
-      // Build pagination CSS
       let paginationCSS = ''
       if (printForm.value.pagination === 'section') {
         paginationCSS = `
@@ -1664,38 +1652,32 @@ export default {
         `
       }
 
-      // Determine the print size class and target dimensions
-      let printSizeClass = '';
-      let targetWidthPx = 0; // Usable width in pixels
-      let targetHeightPx = 0; // Usable height in pixels
-      const DPI = 96; // Standard browser DPI
-      const marginInches = 0.5; // From @page margin in style.css
+      const DPI = 96;
+      const marginInches = 0.5;
+      const isLandscape = printForm.value.orientation === 'landscape';
+      
+      let pageSizeStr = '8.5in 11in';
+      let pageW = 8.5;
+      let pageH = 11;
 
-      if (printForm.value.paperSize === 'letter') {
-        printSizeClass = 'print-letter';
-        targetWidthPx = (8.5 - 2 * marginInches) * DPI;
-        targetHeightPx = (11 - 2 * marginInches) * DPI;
-      } else if (printForm.value.paperSize === 'tabloid') {
-        printSizeClass = 'print-11x17';
-        targetWidthPx = (11 - 2 * marginInches) * DPI;
-        targetHeightPx = (17 - 2 * marginInches) * DPI;
+      if (printForm.value.paperSize === 'tabloid') {
+        pageW = 11; pageH = 17;
       } else if (printForm.value.paperSize === 'archD') {
-        printSizeClass = 'print-arch-d';
-        targetWidthPx = (24 - 2 * marginInches) * DPI;
-        targetHeightPx = (36 - 2 * marginInches) * DPI;
+        pageW = 24; pageH = 36;
       }
 
-      // Adjust target dimensions for orientation
-      const isLandscape = printForm.value.orientation === 'landscape';
-      const usablePageWidth = isLandscape ? Math.max(targetWidthPx, targetHeightPx) : Math.min(targetWidthPx, targetHeightPx);
-      const usablePageHeight = isLandscape ? Math.min(targetWidthPx, targetHeightPx) : Math.max(targetWidthPx, targetHeightPx);
+      if (isLandscape) {
+        pageSizeStr = `${pageH}in ${pageW}in`;
+        [pageW, pageH] = [pageH, pageW];
+      } else {
+        pageSizeStr = `${pageW}in ${pageH}in`;
+      }
 
+      const usablePageWidth = (pageW - 2 * marginInches) * DPI;
       const ganttWrapper = document.querySelector('.gantt-chart-wrapper');
       let scaleFactor = 1;
+      
       if (ganttWrapper) {
-        // Calculate scale factor based on the actual scrollWidth of the content
-        // and the usable width of the selected paper size.
-        // We want to fit the content width-wise.
         const contentWidth = ganttWrapper.scrollWidth;
         if (contentWidth > usablePageWidth) {
           scaleFactor = usablePageWidth / contentWidth;
@@ -1705,26 +1687,40 @@ export default {
       const printStyle = document.createElement('style')
       printStyle.id = 'dynamic-print-style'
       printStyle.textContent = `
-        @page { margin: ${marginInches}in; }
-        .section-group[data-print-hide="true"] { display: none !important; }
-        ${paginationCSS}
-        .gantt-chart-wrapper.print-scale {
-          transform: scale(${scaleFactor});
-          transform-origin: top left;
-          width: ${100 / scaleFactor}%; /* Adjust width to maintain layout after scaling */
-          max-width: ${100 / scaleFactor}%;
+        @page { 
+          size: ${pageSizeStr}; 
+          margin: ${marginInches}in; 
+        }
+        @media print {
+          body {
+            width: ${pageW}in !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          .gantt-container {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          .gantt-chart-wrapper {
+            width: 100% !important;
+            overflow: visible !important;
+          }
+          .section-group[data-print-hide="true"] { display: none !important; }
+          ${paginationCSS}
+          .print-scale-container {
+            transform: scale(${scaleFactor});
+            transform-origin: top left;
+            width: ${100 / scaleFactor}% !important;
+          }
         }
       `
       document.head.appendChild(printStyle)
 
-      // Add the print size class and scaling class to the gantt-chart-wrapper
       if (ganttWrapper) {
-        if (printSizeClass) {
-          ganttWrapper.classList.add(printSizeClass);
-        }
-        if (scaleFactor < 1) { // Only apply scale class if scaling is needed
-          ganttWrapper.classList.add('print-scale');
-        }
+        ganttWrapper.classList.add('print-scale-container');
       }
 
       closePrintModal()
@@ -1737,14 +1733,8 @@ export default {
           document.querySelectorAll('[data-print-hide]').forEach(el => {
             el.removeAttribute('data-print-hide')
           })
-          // Remove the print size class and scaling class
           if (ganttWrapper) {
-            if (printSizeClass) {
-              ganttWrapper.classList.remove(printSizeClass);
-            }
-            if (scaleFactor < 1) {
-              ganttWrapper.classList.remove('print-scale');
-            }
+            ganttWrapper.classList.remove('print-scale-container');
           }
         }
         if (window.onafterprint !== undefined) {
