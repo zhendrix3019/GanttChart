@@ -1782,16 +1782,19 @@ export default {
         }
         
         const scaleW = usablePageWidth / contentWidth;
-        const scaleH = usablePageHeight / contentHeight;
         
         if (printForm.value.autoFit) {
-          // Fill page as much as possible
-          scaleFactor = Math.min(scaleW, scaleH);
+          // Fill page width primarily, as vertical content can flow to next pages
+          scaleFactor = scaleW;
         } else if (contentWidth > usablePageWidth) {
           // Standard: only scale down to fit width
           scaleFactor = scaleW;
         }
       }
+
+      // Add a small buffer to ensure it fills the page properly
+      // (Browsers sometimes have inconsistent margin handling)
+      scaleFactor = scaleFactor * 0.98;
 
       // Handle custom date range for direct print
       let dateFilterCSS = '';
@@ -1833,15 +1836,19 @@ export default {
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           .gantt-container {
-            width: 100% !important;
+            width: ${pageW}in !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;
+            display: block !important;
           }
           .gantt-chart-wrapper {
             width: 100% !important;
+            min-width: 100% !important;
             overflow: visible !important;
           }
           .section-group[data-print-hide="true"] { display: none !important; }
